@@ -102,15 +102,11 @@ print(json.dumps(data, indent=2, sort_keys=True))
         self.features = features
         self.fpath = None
         self.inventory = self.BASEINV.copy()
-        #print('###########################################')
-        #pprint(self.inventory)
-        #print('###########################################')
         self.build()
 
     def build(self):
         xhost = 'testhost'
         if 'script_host' in self.features:
-            #print([x for x in self.features if 'script' in x])
             self.inventory['_meta']['hostvars'][xhost]['findme'] = 'script_host'
         else:
             self.inventory['_meta']['hostvars'][xhost] = {}
@@ -167,7 +163,7 @@ class VarTestMaker(object):
         clean_test_dir()
         self.dynamic_inventory = dynamic_inventory
         self.di = None
-        self.features = features
+        self.features = features[:]
         self.inventory = ''
         self.playvars = dict()
         self.varsfiles = []
@@ -346,14 +342,9 @@ class VarTestMaker(object):
                 role.params = dict(findme='role_params')
             self.roles.append(role)
 
+        task_test = {'assert': dict(that=['findme == "%s"' % self.features[0]])}
         if 'task_vars' in self.features:
-            task_test = {
-               'debug': 'var=findme',
-               'vars': dict(findme="task_vars"),
-            }
-        else:
-            task_test = dict(debug='var=findme')
-
+            task_test['vars'] = dict(findme="task_vars")
         if 'registered_vars' in self.features:
             task_test['register'] = 'findme'
 
@@ -376,7 +367,6 @@ class VarTestMaker(object):
         with open(fname, 'wb') as f:
             f.write(yaml.dump(block_wrapper))
 
-        #self.tasks.extend(block_wrapper)
         self.write_playbook()
 
     def run(self):
@@ -393,19 +383,8 @@ class VarTestMaker(object):
         (rc, so, se) = run_command(cmd, cwd=TESTDIR)
         self.stdout = so
 
-        if rc == 0:
-            val = None
-            try:
-                idx = so.rfind('findme')
-                val = so[idx:]
-                val = val.split('"')[2]
-            except Exception as e:
-                print(e)
-            return val
-        else:
-            print(se)
-            sys.exit(1)
-            return False
+        if rc != 0:
+            raise Exception("playbook failed (rc=%s), stdout: '%s' stderr: '%s'" % (rc, so, se))
 
     def show_tree(self):
         print('## TREE')
@@ -431,12 +410,12 @@ class VarTestMaker(object):
 def main():
     features = [
         'extra_vars',
-        'include_params',
-        #'role_params', # FIXME: we don't yet validate tasks within a role
         'set_fact',
         #'registered_vars', # FIXME: hard to simulate
         'include_vars',
         #'role_dep_params',
+        'include_params',
+        #'role_params', # FIXME: we don't yet validate tasks within a role
         'task_vars',
         'block_vars',
         'role_var',
@@ -513,7 +492,6 @@ def main():
 
     dinv = options.use_dynamic_inventory
 
-    last_removed = None
     index = 1
     while features:
         VTM = VarTestMaker(features, dynamic_inventory=dinv)
@@ -521,54 +499,39 @@ def main():
 
         if options.show_tree or options.show_content or options.show_stdout:
             print('')
-
         if options.show_tree:
             VTM.show_tree()
-
         if options.show_content:
             VTM.show_content()
 
-        res = VTM.run()
-
-        if options.show_stdout:
-            VTM.show_stdout()
-
-        if not res or res == 'VARIABLE IS NOT DEFINED!':
-            print("ERROR: %s" % res)
-            print("tempdir: %s" % TESTDIR)
-            print("last_removed: %s" % last_removed)
-            print("features: %s" % features)
-            sys.exit(1)
-
-        print("EXPECTED: %-30s GOT: %-30s (%s)" % (features[0], res, fdesc.get(features[0], '')))
         try:
-            assert res == features[0]
-            features.remove(res)
+            print("CHECKING: %s (%s)" % (features[0], fdesc.get(features[0], '')))
+            VTM.run()
+            if options.show_stdout:
+                VTM.show_stdout()
+
+            features.pop(0)
+
+            if options.copy_testcases_to_local_dir:
+                topdir = 'testcases'
+                if index == 1 and os.path.isdir(topdir):
+                    shutil.rmtree(topdir)
+                if not os.path.isdir(topdir):
+                    os.makedirs(topdir)
+                thisindex = str(index)
+                if len(thisindex) == 1:
+                    thisindex = '0' + thisindex
+                thisdir = os.path.join(topdir, '%s.%s' % (thisindex, res))
+                shutil.copytree(TESTDIR, thisdir)
+
         except Exception as e:
             print("ERROR !!!")
             print(e)
-            print('feature: %s' % features[0])
-            print('res: %s' % res)
+            print('feature: %s failed' % features[0])
             sys.exit(1)
-        last_removed = res
-
-        if options.copy_testcases_to_local_dir:
-
-            topdir = 'testcases'
-
-            if index == 1 and os.path.isdir(topdir):
-                shutil.rmtree(topdir)
-
-            if not os.path.isdir(topdir):
-                os.makedirs(topdir)
-            thisindex = str(index)
-            if len(thisindex) == 1:
-                thisindex = '0' + thisindex
-            thisdir = os.path.join(topdir, '%s.%s' % (thisindex, res))
-            shutil.copytree(TESTDIR, thisdir)
-
-        shutil.rmtree(TESTDIR)
-        index += 1
+        finally:
+            shutil.rmtree(TESTDIR)
+            index += 1
 
 if __name__ == "__main__":
     main()
