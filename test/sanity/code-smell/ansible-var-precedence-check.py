@@ -21,12 +21,12 @@ TESTDIR = tempfile.mkdtemp()
 
 def run_command(args, cwd=None):
     p = subprocess.Popen(
-            args,
-            stderr=subprocess.PIPE,
-            stdout=subprocess.PIPE,
-            shell=True,
-            cwd=cwd
-        )
+        args,
+        stderr=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        shell=True,
+        cwd=cwd,
+    )
     (so, se) = p.communicate()
     return (p.returncode, so, se)
 
@@ -342,21 +342,23 @@ class VarTestMaker(object):
                 role.params = dict(findme='role_params')
             self.roles.append(role)
 
-        task_test = {'assert': dict(that=['findme == "%s"' % self.features[0]])}
+        debug_task = dict(debug='var=findme')
+        test_task = {'assert': dict(that=['findme == "%s"' % self.features[0]])}
         if 'task_vars' in self.features:
-            task_test['vars'] = dict(findme="task_vars")
+            test_task['vars'] = dict(findme="task_vars")
         if 'registered_vars' in self.features:
-            task_test['register'] = 'findme'
+            test_task['register'] = 'findme'
 
         if 'block_vars' in self.features:
             block_wrapper = [
+                debug_task,
                 {
-                    'block': [task_test],
+                    'block': [test_task],
                     'vars': dict(findme="block_vars"),
                 }
             ]
         else:
-            block_wrapper = [task_test]
+            block_wrapper = [debug_task, test_task]
 
         if 'include_params' in self.features:
             self.tasks.append(dict(name='including tasks', include='included_tasks.yml', vars=dict(findme='include_params')))
@@ -410,12 +412,12 @@ class VarTestMaker(object):
 def main():
     features = [
         'extra_vars',
+        'include_params',
+        #'role_params', # FIXME: we don't yet validate tasks within a role
         'set_fact',
         #'registered_vars', # FIXME: hard to simulate
         'include_vars',
         #'role_dep_params',
-        'include_params',
-        #'role_params', # FIXME: we don't yet validate tasks within a role
         'task_vars',
         'block_vars',
         'role_var',
