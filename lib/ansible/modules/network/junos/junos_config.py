@@ -185,7 +185,6 @@ backup_path:
 """
 import re
 import json
-import sys
 
 from xml.etree import ElementTree
 
@@ -195,12 +194,6 @@ from ansible.module_utils.junos import junos_argument_spec
 from ansible.module_utils.junos import check_args as junos_check_args
 from ansible.module_utils.netconf import send_request
 from ansible.module_utils.six import string_types
-
-if sys.version < (2, 7):
-    from xml.parsers.expat import ExpatError
-    ParseError = ExpatError
-else:
-    ParseError = ElementTree.ParseError
 
 USE_PERSISTENT_CONNECTION = True
 DEFAULT_COMMENT = 'configured by junos_config'
@@ -224,7 +217,7 @@ def guess_format(config):
     try:
         ElementTree.fromstring(config)
         return 'xml'
-    except ParseError:
+    except ElementTree.ParseError:
         pass
 
     if config.startswith('set') or config.startswith('delete'):
