@@ -174,29 +174,7 @@ class DNSZoneIPAClient(IPAClient):
 
 
 def main():
-    client = DNSZoneIPAClient()
-
-    # client.login()
-    # changed, obj = client.ensure()
-    # result = {
-    #     'changed': changed,
-    #     client.name: obj,
-    #     'debug': client.debug,
-    # }
-    # client.module.exit_json(**result)
-    try:
-        client.login()
-        changed, obj = client.ensure()
-        result = {
-            'changed': changed,
-            client.name: obj,
-            'debug': client.debug,
-        }
-        client.module.exit_json(**result)
-    except Exception:
-        e = get_exception()
-        client.module.fail_json(msg=str(e), debug=client.debug)
-
+    DNSZoneIPAClient().main()
 
 if __name__ == '__main__':
     main()
