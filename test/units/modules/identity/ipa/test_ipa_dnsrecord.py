@@ -24,7 +24,7 @@ class TestDNSRecordIPAClient(t_st_ipa_abstract.AbstractTestClass):
         ipa_pass = "secretpass",
     )
 
-    find_result = dict(
+    found_obj = dict(
         dn = "idnsname=host1,idnsname=example.com.,cn=dns,dc=example,dc=com",
         idnsname = [ "host1" ],
         arecord = [ "192.168.42.37", "192.168.43.38" ],
@@ -58,39 +58,60 @@ class TestDNSRecordIPAClient(t_st_ipa_abstract.AbstractTestClass):
         item_filter=None,
     )
 
-    present_existing_params = {
-        'item': {'addattr': ['arecord=192.168.42.38',
-                             'txtrecord=new text'],
-                 'all': True,
-                 'delattr': [],
-                 'setattr': []},
-        'item_filter': None,
-        'method': 'dnsrecord_mod',
-        'name': ['example.com', {'__dns_name__': 'host1'}]}
+    present_existing_data = {
+        # Object already exists
+        'found_obj' : found_obj,
+        # Verify dnszone_mod API params
+        'aom_params' : {
+            'item': {'addattr': ['arecord=192.168.42.38',
+                                 'txtrecord=new text'],
+                     'all': True,
+                     'delattr': [],
+                     'setattr': []},
+            'item_filter': None,
+            'method': 'dnsrecord_mod',
+            'name': ['example.com', {'__dns_name__': 'host1'}]},
+    }
 
-    present_new_params = {
-        'item': {'addattr': ['arecord=192.168.42.38',
-                             'arecord=192.168.43.38',
-                             'txtrecord=new text'],
-                 'all': True,
-                 'delattr': [],
-                 'setattr': []},
-        'item_filter': None,
-        'method': 'dnsrecord_add',
-        'name': ['example.com', {'__dns_name__': 'host1'}]}
+    # No 'enabled_existing' test:  object doesn't support enable/disable
 
-    exact_existing_params = {
-        'item': {'addattr': ['arecord=192.168.42.38',
-                             'txtrecord=new text'],
-                 'all': True,
-                 'delattr': ['arecord=192.168.42.37',
-                             'mxrecord=10 mx.example.com',
-                             'txtrecord=old text',
-                             'txtrecord=old text 2'],
-                 'setattr': []},
-        'item_filter': None,
-        'method': 'dnsrecord_mod',
-        'name': ['example.com', {'__dns_name__': 'host1'}]}
+    present_new_data = {
+        # Object doesn't exist yet
+        'found_obj' : {},
+        # Verify dnsrecord_add API params
+        'aom_params' : {
+            'item': {'addattr': ['arecord=192.168.42.38',
+                                 'arecord=192.168.43.38',
+                                 'txtrecord=new text'],
+                     'all': True,
+                     'delattr': [],
+                     'setattr': []},
+            'item_filter': None,
+            'method': 'dnsrecord_add',
+            'name': ['example.com', {'__dns_name__': 'host1'}]},
+    }
+
+    # No 'disabled_new' test:  object doesn't support enable/disable
+
+    exact_existing_data = {
+        # Object already exists
+        'found_obj' : found_obj,
+        # Request object state exactly as specified in module params
+        'module_params_updates' : {'state' : 'exact'},
+        # Verify dnsrecord_mod API params
+        'aom_params' : {
+            'item': {'addattr': ['arecord=192.168.42.38',
+                                 'txtrecord=new text'],
+                     'all': True,
+                     'delattr': ['arecord=192.168.42.37',
+                                 'mxrecord=10 mx.example.com',
+                                 'txtrecord=old text',
+                                 'txtrecord=old text 2'],
+                     'setattr': []},
+            'item_filter': None,
+            'method': 'dnsrecord_mod',
+            'name': ['example.com', {'__dns_name__': 'host1'}]},
+    }
 
     rem_params = {
         'item': {},

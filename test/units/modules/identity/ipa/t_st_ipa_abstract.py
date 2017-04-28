@@ -27,13 +27,14 @@ class AbstractTestClass(unittest.TestCase):
 
     @patch('ansible.module_utils.ipa.AnsibleModule', autospec=True)
     def get_tst_class(self, mod_cls,
+                      module_params={},
                       module_params_updates={},
-                      find_result=None):
+                      found_obj=None):
         # Mock AnsibleModule instance with attributes
         mod = mod_cls.return_value
         mod.check_mode = False
-        # Update module params for test
-        mod.params = self.module_params.copy()
+        # Set up module params for test
+        mod.params = module_params.copy() or self.module_params.copy()
         mod.params.update(module_params_updates)
 
         # Create instance
@@ -43,8 +44,8 @@ class AbstractTestClass(unittest.TestCase):
         assert client.module is mod
 
         # Patch _post_json method (object only, not class)
-        if find_result is None:  find_result = self.find_result
-        self.mock_post_json = MagicMock(return_value=find_result)
+        if found_obj is None:  found_obj = self.found_obj
+        self.mock_post_json = MagicMock(return_value=found_obj)
         client._post_json = self.mock_post_json
 
         return client
@@ -72,16 +73,16 @@ class AbstractTestClass(unittest.TestCase):
             self.assertIsInstance(client.name_map(action_type,0), basestring)
 
         # Enable/disable checks
-        if 'enable' in client._methods or 'disable' in client._methods:
+        if 'enabled' in client._methods or 'disabled' in client._methods:
             # The complement must also exist
-            self.assertIn('enable', client._methods)
-            self.assertIn('disable', client._methods)
+            self.assertIn('enabled', client._methods)
+            self.assertIn('disabled', client._methods)
             # And the flag param must be specified
             self.assertIsNotNone(client.enablekey)
         else: # The opposite:
             # The complement must not exist
-            self.assertNotIn('enable', client._methods)
-            self.assertNotIn('disable', client._methods)
+            self.assertNotIn('enabled', client._methods)
+            self.assertNotIn('disabled', client._methods)
             # And the flag param must not be specified
             self.assertIsNone(client.enablekey)
 
@@ -99,7 +100,7 @@ class AbstractTestClass(unittest.TestCase):
     )
 
     # Sample results from a `find` API request
-    find_result = dict(
+    found_obj = dict(
         # dn = "cn=host1.example.com.,cn=dns,dc=example,dc=com",
         # param1 = [ "val1" ], 
         # objectclass = [ "someclass1", "top", "someclass2" ],
@@ -118,9 +119,9 @@ class AbstractTestClass(unittest.TestCase):
                          call(**self.find_params))
 
         # Verify the result
-        print "client.current_obj:"; pprint (client.current_obj)
+        print "client.found_obj:"; pprint (client.found_obj)
 
-        self.assertEqual(self.find_result['dn'], client.current_obj['dn'])
+        self.assertEqual(self.found_obj['dn'], client.found_obj['dn'])
 
 
     #################################################################
@@ -129,7 +130,7 @@ class AbstractTestClass(unittest.TestCase):
 
     def test_03_compute_changes(self):
         client = self.get_tst_class(
-            find_result=self.find_result)
+            found_obj=self.found_obj)
         client.find()
 
         # Exercise compute_changes()
@@ -143,66 +144,135 @@ class AbstractTestClass(unittest.TestCase):
     # add_or_mod()
     #################################################################
 
-    def add_or_mod_helper(
-            self,
-            expected_result_attr=None,
-            find_result={},
-            expected_state=None,
-            module_params_updates={} ):
-        if not hasattr(self, expected_result_attr):
+    def add_or_mod_helper(self, test_data_attr):
+        if not hasattr(self, test_data_attr):
             return unittest.skip('Unimplemented or inapplicable')
-        expected_result = getattr(self, expected_result_attr)
+        test_data = getattr(self, test_data_attr)
 
-        # Get patched test class
+        #
+        # Set up patched test object
+        #
+
+        # Module params, i.e. task params
+        module_params = test_data.get('module_params',self.module_params).copy()
+        module_params.update(test_data.get('module_params_updates',{}))
+        # Mocked output of `objtype_find()` API call
+        found_obj = test_data.get('found_obj',{}).copy()
+        found_obj.update(test_data.get('found_obj_updates',{}))
+        # Get patched test class instance
         client = self.get_tst_class(
-            find_result=find_result,
-            module_params_updates=module_params_updates)
-        # Run find():  set up for add_or_mod
+            module_params = module_params,
+            found_obj = found_obj)
+
+        #
+        # Run find()
+        #
+
         client.find()
+        print "*** find() found_obj:"; pprint(client.found_obj)
         # Sanity check: verify expected state
-        self.assertEqual(expected_state, client.state)
+        self.assertEqual(module_params['state'], client.state)
+        # Sanity check: found object
+        if 'dn' in test_data.get('found_obj',{}):
+            self.assertEqual(test_data['found_obj']['dn'],
+                             client.found_obj.get('dn',None))
+
+        #
+        # Run and verify add_or_mod()
+        #
+
         # Reset mock object
         self.mock_post_json.reset_mock()
+        # Set add/mod API call mock return value
+        updated_obj = test_data.get('updated_obj',found_obj).copy()
+        updated_obj.update(test_data.get('updated_obj_updates',{}))
+        self.mock_post_json.return_value = updated_obj
 
         # Exercise add_or_mod()
         client.add_or_mod()
 
-        # Verify the call
+        # Verify the call happened...
         self.assertEqual(client._post_json.call_count, 1)
-        print "client._post_json.call_args:"
+        # .
+        print "*** add_or_mod() client._post_json.call_args:"
         pprint (client._post_json.call_args[1])
-        self.assertEqual(expected_result, client._post_json.call_args[1])
+        self.assertEqual(test_data['aom_params'],
+                         client._post_json.call_args[1])
+        print "*** add_or_mod() updated_obj:"; pprint(client.updated_obj)
 
+        #
+        # enable_or_disable()
+        #
+        eod_should_run = (
+            'eod_params' in test_data or \
+            (module_params['state'] == 'disabled' and client.is_enabled) or \
+            (module_params['state'] == 'enabled' and not client.is_enabled))
+        print '*** enable_or_disable():' \
+            '  eod_should_run=%s; have eod_params=%s' % \
+            (eod_should_run, 'eod_params' in test_data)
+
+        # Reset mock object
+        self.mock_post_json.reset_mock()
+        # Set enable/disable API call mock return value
+        final_obj = test_data.get('final_obj', updated_obj)
+        final_obj.update(test_data.get('final_obj_updates',{}))
+        self.mock_post_json.return_value = final_obj
+        # Run enable_or_disable()
+        client.enable_or_disable()
+
+        # Verify the call happened if it should have
+        self.assertEqual(client._post_json.call_count,
+                         1 if eod_should_run else 0)
+
+        if eod_should_run:
+            print "*** enable_or_disable() client._post_json.call_args:"
+            pprint (client._post_json.call_args[1])
+
+            # Verify eod() API request
+            if 'eod_params' in test_data:
+                self.assertEqual(test_data['eod_params'],
+                                 client._post_json.call_args[1])
+        
     def test_04_present_existing(self):
-        self.add_or_mod_helper(
-            'present_existing_params',
-            expected_state='present',
-            find_result=self.find_result)
+        # Test state==present on existing object
+        # present_existing_data = {
+        #     'found_obj' : found_obj,
+        #     'aom_params' : {
+        #         'item' : {'delattr': [],
+        #                   'all': True,
+        #                   'setattr': [...],
+        #                   'addattr': []},
+        #         'item_filter': None,
+        #         'method' : 'objtype_mod',
+        #         'name' : ['myobject_key']},
+        # }
+        self.add_or_mod_helper('present_existing_data')
 
     def test_05_enabled_existing(self):
-        self.add_or_mod_helper(
-            'enabled_existing_params',
-            expected_state='enabled',
-            find_result=self.find_result)
+        # Test state==enabled on existing object
+        # enabled_existing_data = {
+        #     'module_params_updates' : {'state' : 'enabled'},
+        #     'found_obj' : found_obj,
+        #     'aom_params' : { (like 'present_existing' test) },
+        #     # optionally, set up so `objtype_enable` method runs...
+        #     'found_obj_updates' : {'objtypeactive' : ['FALSE']},
+        #     # ...and verify enable/disable API call params
+        #     'eod_params' : {
+        #         'item' : {},
+        #         'item_filter': None,
+        #         'method' : 'dnszone_enable',
+        #         'name' : ['test.example.com']},
+        # }
+        self.add_or_mod_helper('enabled_existing_data')
 
     def test_06_present_new(self):
-        self.add_or_mod_helper(
-            'present_new_params',
-            expected_state='present')
+        self.add_or_mod_helper('present_new_data')
 
     def test_07_disabled_new(self):
-        self.add_or_mod_helper(
-            'disabled_new_params',
-            expected_state='disabled',
-            module_params_updates={'state':'disabled'})
+        self.add_or_mod_helper('disabled_new_data')
 
     def test_08_exact_existing(self):
-        self.maxDiff=None
-        self.add_or_mod_helper(
-            'exact_existing_params',
-            expected_state='exact',
-            find_result=self.find_result,
-            module_params_updates={'state':'exact'})
+        self.add_or_mod_helper('exact_existing_data')
 
     def test_09_rem(self):
         client = self.get_tst_class(
@@ -218,3 +288,4 @@ class AbstractTestClass(unittest.TestCase):
         print "client._post_json.call_args:"
         pprint (client._post_json.call_args[1])
         self.assertEqual(self.rem_params, client._post_json.call_args[1])
+
