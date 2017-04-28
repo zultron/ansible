@@ -24,14 +24,13 @@ class TestDNSRecordIPAClient(t_st_ipa_abstract.AbstractTestClass):
         ipa_pass = "secretpass",
     )
 
-    found_obj = dict(
-        dn = "idnsname=host1,idnsname=example.com.,cn=dns,dc=example,dc=com",
-        idnsname = [ "host1" ],
-        arecord = [ "192.168.42.37", "192.168.43.38" ],
-        mxrecord = [ "10 mx.example.com" ],
-        txtrecord = [ "old text", "old text 2" ],
-        objectClass = [ "top", "idnsrecord" ],
-    )
+    found_obj = {
+        'arecord': ['192.168.42.37', '192.168.43.38'],
+        'dn': 'idnsname=host1,idnsname=example.com.,cn=dns,dc=example,dc=com',
+        'idnsname': ['host1'],
+        'mxrecord': ['10 mx.example.com'],
+        'objectClass': ['top', 'idnsrecord'],
+        'txtrecord': ['old text', 'old text 2']}
 
     curr_cleaned = dict(
         arecord = ['192.168.42.37'],
@@ -58,6 +57,12 @@ class TestDNSRecordIPAClient(t_st_ipa_abstract.AbstractTestClass):
         item_filter=None,
     )
 
+    # This object makes most operations idempotent; reuse it
+    idempotent_obj_updates = {
+        'arecord': ['192.168.42.37', '192.168.43.38', '192.168.42.38'],
+        'txtrecord': ['old text', 'old text 2', 'new text'],
+    }
+
     present_existing_data = {
         # Object already exists
         'found_obj' : found_obj,
@@ -71,9 +76,11 @@ class TestDNSRecordIPAClient(t_st_ipa_abstract.AbstractTestClass):
             'item_filter': None,
             'method': 'dnsrecord_mod',
             'name': ['example.com', {'__dns_name__': 'host1'}]},
+        # Idempotency changes
+        'idempotent_obj_updates' : idempotent_obj_updates,
     }
 
-    # No 'enabled_existing' test:  object doesn't support enable/disable
+    enabled_existing_data = 'N/A (en/disable unsupported)'
 
     present_new_data = {
         # Object doesn't exist yet
@@ -89,9 +96,11 @@ class TestDNSRecordIPAClient(t_st_ipa_abstract.AbstractTestClass):
             'item_filter': None,
             'method': 'dnsrecord_add',
             'name': ['example.com', {'__dns_name__': 'host1'}]},
+        # Idempotency changes
+        'idempotent_obj_updates' : idempotent_obj_updates,
     }
 
-    # No 'disabled_new' test:  object doesn't support enable/disable
+    disabled_new_data = 'N/A (en/disable unsupported)'
 
     exact_existing_data = {
         # Object already exists
@@ -111,6 +120,13 @@ class TestDNSRecordIPAClient(t_st_ipa_abstract.AbstractTestClass):
             'item_filter': None,
             'method': 'dnsrecord_mod',
             'name': ['example.com', {'__dns_name__': 'host1'}]},
+        # Idempotency
+        'idempotent_obj' : {
+            'arecord': [ "192.168.42.38", "192.168.43.38" ],
+            'dn': 'idnsname=host1,idnsname=example.com.,cn=dns,dc=example,dc=com',
+            'idnsname': ['host1'],
+            'objectClass': ['top', 'idnsrecord'],
+            'txtrecord' : ['new text']},
     }
 
     rem_params = {

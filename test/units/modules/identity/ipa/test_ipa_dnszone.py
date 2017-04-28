@@ -82,6 +82,12 @@ class TestDNSZoneIPAClient(t_st_ipa_abstract.AbstractTestClass):
         item_filter=None,
     )
 
+    # These changes make most operations idempotent
+    idempotent_obj_updates = {
+        'idnsallowdynupdate' : ['TRUE'],
+        'idnszoneactive': ['TRUE'],
+        'nsrecord' : ['host2.example.com.']}
+
     present_existing_data = {
         # Object already exists
         'found_obj' : found_obj,
@@ -95,6 +101,12 @@ class TestDNSZoneIPAClient(t_st_ipa_abstract.AbstractTestClass):
             'item_filter': None,
             'method' : 'dnszone_mod',
             'name' : ['test.example.com']},
+        # Idempotency changes
+        'idempotent_obj_updates' : {
+            'arecord': ['192.168.42.37', '192.168.43.38'],
+            'idnsallowdynupdate': ['TRUE'],
+            'nsrecord': ['host2.example.com.'],
+        },
     }
 
     enabled_existing_data = {
@@ -119,7 +131,8 @@ class TestDNSZoneIPAClient(t_st_ipa_abstract.AbstractTestClass):
             'item_filter': None,
             'method' : 'dnszone_enable',
             'name' : ['test.example.com']},
-
+        # Idempotency changes
+        'idempotent_obj_updates' : idempotent_obj_updates,
     }
 
     present_new_data = {
@@ -136,6 +149,9 @@ class TestDNSZoneIPAClient(t_st_ipa_abstract.AbstractTestClass):
             'item_filter': None,
             'method' : 'dnszone_add',
             'name' : ['test.example.com']},
+        # Idempotency
+        'idempotent_obj' : found_obj,
+        'idempotent_obj_updates' : idempotent_obj_updates,
     }
 
     disabled_new_data = {
@@ -165,6 +181,12 @@ class TestDNSZoneIPAClient(t_st_ipa_abstract.AbstractTestClass):
             'item_filter': None,
             'method' : 'dnszone_disable',
             'name' : ['test.example.com']},
+        # Idempotency
+        'idempotent_obj' : found_obj,
+        'idempotent_obj_updates' : {
+            'idnsallowdynupdate' : ['TRUE'],
+            'idnszoneactive': ['FALSE'],
+            'nsrecord' : ['host2.example.com.']},
     }
 
     exact_existing_data = {
@@ -192,6 +214,11 @@ class TestDNSZoneIPAClient(t_st_ipa_abstract.AbstractTestClass):
             'item_filter': None,
             'method' : 'dnszone_mod',
             'name' : ['test.example.com']},
+        # Idempotency
+        'idempotent_obj' : {
+            'idnsallowdynupdate' : ['TRUE'],
+            'idnsallowtransfer' : ['none;'],
+            'nsrecord' : ['host2.example.com.']},
     }
 
     rem_params = {

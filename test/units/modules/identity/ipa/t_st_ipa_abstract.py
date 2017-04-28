@@ -5,6 +5,7 @@ __metaclass__ = type
 from ansible.compat.tests import unittest
 from ansible.compat.tests.mock import call, create_autospec, patch, MagicMock
 
+from copy import deepcopy
 from pprint import pprint
 
 class AbstractTestClass(unittest.TestCase):
@@ -145,9 +146,10 @@ class AbstractTestClass(unittest.TestCase):
     #################################################################
 
     def add_or_mod_helper(self, test_data_attr):
-        if not hasattr(self, test_data_attr):
-            return unittest.skip('Unimplemented or inapplicable')
-        test_data = getattr(self, test_data_attr)
+        test_data = deepcopy(getattr(self, test_data_attr))
+        if isinstance(test_data, basestring):
+            raise unittest.SkipTest(test_data)
+
 
         #
         # Set up patched test object
@@ -157,7 +159,7 @@ class AbstractTestClass(unittest.TestCase):
         module_params = test_data.get('module_params',self.module_params).copy()
         module_params.update(test_data.get('module_params_updates',{}))
         # Mocked output of `objtype_find()` API call
-        found_obj = test_data.get('found_obj',{}).copy()
+        found_obj = deepcopy(test_data.get('found_obj',{}))
         found_obj.update(test_data.get('found_obj_updates',{}))
         # Get patched test class instance
         client = self.get_tst_class(
@@ -184,7 +186,7 @@ class AbstractTestClass(unittest.TestCase):
         # Reset mock object
         self.mock_post_json.reset_mock()
         # Set add/mod API call mock return value
-        updated_obj = test_data.get('updated_obj',found_obj).copy()
+        updated_obj = deepcopy(test_data.get('updated_obj',found_obj))
         updated_obj.update(test_data.get('updated_obj_updates',{}))
         self.mock_post_json.return_value = updated_obj
 
@@ -193,9 +195,9 @@ class AbstractTestClass(unittest.TestCase):
 
         # Verify the call happened...
         self.assertEqual(client._post_json.call_count, 1)
-        # .
-        print "*** add_or_mod() client._post_json.call_args:"
+        print "*** add_or_mod() call_args:"
         pprint (client._post_json.call_args[1])
+        self.maxDiff = None
         self.assertEqual(test_data['aom_params'],
                          client._post_json.call_args[1])
         print "*** add_or_mod() updated_obj:"; pprint(client.updated_obj)
@@ -214,7 +216,7 @@ class AbstractTestClass(unittest.TestCase):
         # Reset mock object
         self.mock_post_json.reset_mock()
         # Set enable/disable API call mock return value
-        final_obj = test_data.get('final_obj', updated_obj)
+        final_obj = deepcopy(test_data.get('final_obj', updated_obj))
         final_obj.update(test_data.get('final_obj_updates',{}))
         self.mock_post_json.return_value = final_obj
         # Run enable_or_disable()
@@ -225,28 +227,97 @@ class AbstractTestClass(unittest.TestCase):
                          1 if eod_should_run else 0)
 
         if eod_should_run:
-            print "*** enable_or_disable() client._post_json.call_args:"
+            print "*** enable_or_disable() call_args:"
             pprint (client._post_json.call_args[1])
 
             # Verify eod() API request
             if 'eod_params' in test_data:
                 self.assertEqual(test_data['eod_params'],
                                  client._post_json.call_args[1])
+
+        # Return client for idempotent run
+        return client
         
+    def idempotency_helper(self, old_client, test_data_attr):
+        if not hasattr(self, test_data_attr):
+            return
+        test_data = getattr(self, test_data_attr)
+
+        #
+        # Set up patched test object
+        #
+
+        # Module params, i.e. task params
+        module_params = test_data.get('module_params',self.module_params).copy()
+        module_params.update(test_data.get('module_params_updates',{}))
+        # Mocked output of `objtype_find()` API call
+        found_obj = deepcopy(
+            test_data.get('idempotent_obj',old_client.final_obj))
+        found_obj.update(test_data.get('idempotent_obj_updates',{}))
+        # Get patched test class instance
+        new_client = self.get_tst_class(
+            module_params = module_params,
+            found_obj = found_obj)
+        # Run find()
+        new_client.find()
+
+        #
+        # Run and verify add_or_mod()
+        #
+
+        # Reset mock object
+        self.mock_post_json.reset_mock()
+        # Set add/mod API call mock return value
+        self.mock_post_json.return_value = deepcopy(found_obj)
+        # Exercise add_or_mod()
+        new_client.add_or_mod()
+        # Verify the call did NOT happen (or print debug info & fail)
+        if new_client._post_json.call_count > 0:
+            print "*** idempotency error:  add_or_mod()"
+            print "--- module_params:"
+            pprint (module_params)
+            print "--- found_obj:"
+            pprint (found_obj)
+            print "--- call_args:"
+            pprint (new_client._post_json.call_args[1])
+        self.assertEqual(new_client._post_json.call_count, 0)
+
+        #
+        # Run and verify enable_or_disable()
+        #
+
+        # Reset mock object
+        self.mock_post_json.reset_mock()
+        # Set enable/disable API call mock return value
+        self.mock_post_json.return_value = deepcopy(found_obj)
+        # Run enable_or_disable()
+        new_client.enable_or_disable()
+        # Verify the call did NOT happen
+        if new_client._post_json.call_count > 0:
+            print "*** idempotency error:  enable_or_disable()"
+            print "--- module_params:"
+            pprint (module_params)
+            print "--- found_obj:"
+            pprint (found_obj)
+            print "--- call_args:"
+            pprint (new_client._post_json.call_args[1])
+        self.assertEqual(new_client._post_json.call_count, 0)
+
     def test_04_present_existing(self):
         # Test state==present on existing object
         # present_existing_data = {
         #     'found_obj' : found_obj,
         #     'aom_params' : {
-        #         'item' : {'delattr': [],
-        #                   'all': True,
-        #                   'setattr': [...],
-        #                   'addattr': []},
+        #         'item' : {'all': True,
+        #                   'addattr': [...],  # Add items here or
+        #                   'setattr': [...],  # here as appropriate
+        #                   'delattr': []},    # Leave this empty
         #         'item_filter': None,
         #         'method' : 'objtype_mod',
         #         'name' : ['myobject_key']},
         # }
-        self.add_or_mod_helper('present_existing_data')
+        client = self.add_or_mod_helper('present_existing_data')
+        self.idempotency_helper(client, 'present_existing_data')
 
     def test_05_enabled_existing(self):
         # Test state==enabled on existing object
@@ -254,7 +325,7 @@ class AbstractTestClass(unittest.TestCase):
         #     'module_params_updates' : {'state' : 'enabled'},
         #     'found_obj' : found_obj,
         #     'aom_params' : { (like 'present_existing' test) },
-        #     # optionally, set up so `objtype_enable` method runs...
+        #     # Set up so `objtype_enable` method runs...
         #     'found_obj_updates' : {'objtypeactive' : ['FALSE']},
         #     # ...and verify enable/disable API call params
         #     'eod_params' : {
@@ -263,18 +334,56 @@ class AbstractTestClass(unittest.TestCase):
         #         'method' : 'dnszone_enable',
         #         'name' : ['test.example.com']},
         # }
-        self.add_or_mod_helper('enabled_existing_data')
+        client = self.add_or_mod_helper('enabled_existing_data')
+        self.idempotency_helper(client, 'enabled_existing_data')
 
     def test_06_present_new(self):
-        self.add_or_mod_helper('present_new_data')
+        # Test state==present on new object
+        # present_new_data = {
+        #     'found_obj' : {},
+        #     'aom_params' : {
+        #          (like 'present_existing' test, but different method)
+        #         'method' : 'objtype_add'},
+        # }
+        client = self.add_or_mod_helper('present_new_data')
+        self.idempotency_helper(client, 'present_new_data')
 
     def test_07_disabled_new(self):
-        self.add_or_mod_helper('disabled_new_data')
+        # Test state==disabled on new object
+        # present_new_data = {
+        #     'found_obj' : {},
+        #     'aom_params' : {
+        #          (like 'present_existing' test, but different method)
+        #         'method' : 'objtype_add'},
+        #     # Set up so `objtype_disable` method runs...
+        #     'found_obj_updates' : {'objtypeactive' : ['TRUE']},
+        #     # ...and verify enable/disable API call params
+        #     'eod_params' : {
+        #         'item' : {},
+        #         'item_filter': None,
+        #         'method' : 'dnszone_disable',
+        #         'name' : ['test.example.com']},
+        # }
+        client = self.add_or_mod_helper('disabled_new_data')
+        self.idempotency_helper(client, 'disabled_new_data')
 
     def test_08_exact_existing(self):
-        self.add_or_mod_helper('exact_existing_data')
+        # Test state==exact on existing object
+        # present_existing_data = {
+        #     'found_obj' : found_obj,
+        #     'aom_params' : {
+        #         'item' : {'all': True,
+        #                   'addattr': [...],  # Add items to any
+        #                   'setattr': [...],  # of these, as appropriate
+        #                   'delattr': [...]},
+        #         'item_filter': None,
+        #         'method' : 'objtype_mod',
+        #         'name' : ['myobject_key']},
+        # }
+        client = self.add_or_mod_helper('exact_existing_data')
+        self.idempotency_helper(client, 'exact_existing_data')
 
-    def test_09_rem(self):
+    def test_20_rem(self):
         client = self.get_tst_class(
             module_params_updates=dict(state='absent'))
         client.find()
