@@ -290,7 +290,7 @@ class IPAClient(object):
         keys = set(self.method_map.keys())
         res = {}
         for key in set(a) | set(b):
-            if key not in keys: continue
+            # if key not in self.method_map: continue
             # FIXME can we treat scalars this way?
             # if self.method_map[key]['type'] != 'list': continue
             # FIXME
@@ -308,7 +308,7 @@ class IPAClient(object):
                              action = 'mod' if self.current_obj else 'add')
         curr_params = current['item']
 
-        changes = {'addattr':{}, 'delattr':{}}
+        changes = {'addattr':{}, 'delattr':{}, 'setattr':{}}
         if self.state in ('exact', 'present', 'enabled', 'disabled'):
             changes['addattr'].update(
                 self.op(change_params, curr_params, 'difference'))
@@ -324,12 +324,29 @@ class IPAClient(object):
         if self.state == 'disabled' and \
            self.current_obj.get(self.enablekey,[True])[0]:
             changes['addattr'][self.enablekey] = ['FALSE']
+
+        for key in changes['addattr'].keys():
+            # Find only non-list keys
+            if self.method_map[key]['type'] == 'list':  continue
+            # Sanity check:  exactly one entry in add list
+            if len(changes['addattr'][key]) != 1:
+                self._fail(key, 'Found multiple entries of non-list attribute')
+            # Sanity check:  no more than one entry in del list
+            if len(changes['delattr'].get(key,[])) > 1:
+                self._fail(key, 'Found multiple entries of non-list attribute')
+            # Pop key from del list
+            changes['delattr'].pop(key,None)
+            # Move key from add list to set list
+            changes['setattr'][key] = changes['addattr'].pop(key)
+
         self.changes = changes
-        self.changed = bool(changes['addattr'] or changes['delattr'])
+        self.changed = bool(changes['addattr'] or changes['delattr']
+                            or changes['setattr'])
         return request
 
     def expand_changes(self):
-        expanded_changes = {'addattr':[], 'delattr':[], 'all':True}
+        expanded_changes = {'addattr':[], 'delattr':[], 'setattr':[],
+                            'all':True}
         for op in self.changes:
             for attr, val_list in self.changes[op].items():
                 for val in val_list:

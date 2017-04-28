@@ -72,9 +72,10 @@ class TestDNSZoneIPAClient(t_st_ipa_abstract.AbstractTestClass):
         )
 
     compute_changes_results = {
-        'addattr': {'idnsallowdynupdate': [True],
+        'setattr': {'idnsallowdynupdate': [True],
                      'nsrecord': ['host2.example.com.']},
-        'delattr': {}}
+        'delattr': {},
+        'addattr': {}}
 
     find_params = dict(
         method='dnszone_find',
@@ -87,8 +88,9 @@ class TestDNSZoneIPAClient(t_st_ipa_abstract.AbstractTestClass):
     enabled_existing_params = {
         'item' : {'delattr': [],
                   'all': True,
-                  'addattr': ['idnsallowdynupdate=True',
-                              'nsrecord=host2.example.com.']},
+                  'setattr': ['idnsallowdynupdate=True',
+                              'nsrecord=host2.example.com.'],
+                  'addattr': []},
         'item_filter': None,
         'method' : 'dnszone_mod',
         'name' : ['test.example.com']}
@@ -96,17 +98,17 @@ class TestDNSZoneIPAClient(t_st_ipa_abstract.AbstractTestClass):
     disabled_new_params = {
         'item' : {'delattr': [],
                   'all': True,
-                  'addattr': ['idnsallowdynupdate=True',
+                  'setattr': ['idnsallowdynupdate=True',
                               'idnsallowtransfer=none;',
                               'idnszoneactive=FALSE',
-                              'nsrecord=host2.example.com.']},
+                              'nsrecord=host2.example.com.'],
+                  'addattr': []},
         'item_filter': None,
         'method' : 'dnszone_add',
         'name' : ['test.example.com']}
 
     exact_existing_params = {
-        'item' : {'delattr': ['idnsallowdynupdate=FALSE',
-                              'idnsallowquery=any;',
+        'item' : {'delattr': ['idnsallowquery=any;',
                               'idnssoaexpire=1209600',
                               'idnssoaminimum=3600',
                               'idnssoamname=host1.example.com.',
@@ -116,11 +118,11 @@ class TestDNSZoneIPAClient(t_st_ipa_abstract.AbstractTestClass):
                               'idnssoaserial=1493244462',
                               ('idnsupdatepolicy=grant EXAMPLE.COM krb5-self * A;'
                                ' grant EXAMPLE.COM krb5-self * AAAA;'
-                               ' grant EXAMPLE.COM krb5-self * SSHFP;'),
-                              'nsrecord=host1.example.com.'],
+                               ' grant EXAMPLE.COM krb5-self * SSHFP;')],
                   'all': True,
-                  'addattr': ['idnsallowdynupdate=True',
-                              'nsrecord=host2.example.com.']},
+                  'setattr': ['idnsallowdynupdate=True',
+                              'nsrecord=host2.example.com.'],
+                  'addattr': []},
         'item_filter': None,
         'method' : 'dnszone_mod',
         'name' : ['test.example.com']}

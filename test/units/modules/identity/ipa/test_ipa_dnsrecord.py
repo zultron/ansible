@@ -47,7 +47,8 @@ class TestDNSRecordIPAClient(t_st_ipa_abstract.AbstractTestClass):
     compute_changes_results = {
         'addattr': {'arecord': ['192.168.42.38'],
                     'txtrecord': ['new text']},
-        'delattr': {}}
+        'delattr': {},
+        'setattr': {}}
 
     find_params = dict(
         method='dnsrecord_find',
@@ -61,7 +62,8 @@ class TestDNSRecordIPAClient(t_st_ipa_abstract.AbstractTestClass):
         'item': {'addattr': ['arecord=192.168.42.38',
                              'txtrecord=new text'],
                  'all': True,
-                 'delattr': []},
+                 'delattr': [],
+                 'setattr': []},
         'item_filter': None,
         'method': 'dnsrecord_mod',
         'name': ['example.com', {'__dns_name__': 'host1'}]}
@@ -71,7 +73,8 @@ class TestDNSRecordIPAClient(t_st_ipa_abstract.AbstractTestClass):
                              'arecord=192.168.43.38',
                              'txtrecord=new text'],
                  'all': True,
-                 'delattr': []},
+                 'delattr': [],
+                 'setattr': []},
         'item_filter': None,
         'method': 'dnsrecord_add',
         'name': ['example.com', {'__dns_name__': 'host1'}]}
@@ -83,7 +86,8 @@ class TestDNSRecordIPAClient(t_st_ipa_abstract.AbstractTestClass):
                  'delattr': ['arecord=192.168.42.37',
                              'mxrecord=10 mx.example.com',
                              'txtrecord=old text',
-                             'txtrecord=old text 2']},
+                             'txtrecord=old text 2'],
+                 'setattr': []},
         'item_filter': None,
         'method': 'dnsrecord_mod',
         'name': ['example.com', {'__dns_name__': 'host1'}]}
