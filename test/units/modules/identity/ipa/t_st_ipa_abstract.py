@@ -5,7 +5,7 @@ __metaclass__ = type
 from ansible.compat.tests import unittest
 from ansible.compat.tests.mock import call, create_autospec, patch, MagicMock
 
-from ansible.module_utils.ipa import IPAObjectDiff
+from pprint import pprint
 
 class AbstractTestClass(unittest.TestCase):
 
@@ -13,7 +13,6 @@ class AbstractTestClass(unittest.TestCase):
     test_class = None
     # ipa_module = 'ipa_somename'
     ipa_module = None
-    test_diff_class = IPAObjectDiff
 
     # Module parameters as supplied in task
     module_params = dict(
@@ -27,7 +26,9 @@ class AbstractTestClass(unittest.TestCase):
 
 
     @patch('ansible.module_utils.ipa.AnsibleModule', autospec=True)
-    def get_tst_class(self, mod_cls, module_params_updates={}):
+    def get_tst_class(self, mod_cls,
+                      module_params_updates={},
+                      find_result=None):
         # Mock AnsibleModule instance with attributes
         mod = mod_cls.return_value
         mod.check_mode = False
@@ -42,7 +43,9 @@ class AbstractTestClass(unittest.TestCase):
         assert client.module is mod
 
         # Patch _post_json method (object only, not class)
-        client._post_json = MagicMock(return_value=self.find_result)
+        if find_result is None:  find_result = self.find_result
+        self.mock_post_json = MagicMock(return_value=find_result)
+        client._post_json = self.mock_post_json
 
         return client
 
@@ -54,8 +57,8 @@ class AbstractTestClass(unittest.TestCase):
         client = self.get_tst_class()
 
         # Verify client._methods keys
-        self.assertEqual(set(client._methods.keys()),
-                         set(self.test_class.methods.keys()))
+        self.assertEqual(set(self.test_class.methods.keys()),
+                         set(client._methods.keys()))
 
         # Verify argument_spec keys
         self.assertEqual(
@@ -65,8 +68,8 @@ class AbstractTestClass(unittest.TestCase):
             set(client.argument_spec.keys()))
 
         # Check for known NAME key in action types
-        for action_type in ['add','rem','mod']:
-            self.assertIn(action_type, client.name_map)
+        for action_type in ['add','rem']:
+            self.assertIsInstance(client.name_map(action_type,0), basestring)
 
         # Enable/disable checks
         if 'enable' in client._methods or 'disable' in client._methods:
@@ -106,9 +109,6 @@ class AbstractTestClass(unittest.TestCase):
     def test_02_find(self):
         client = self.get_tst_class()
 
-        # Verify action_type
-        self.assertEqual(client.action_type, 'find')
-
         # Exercise find()
         client.find()
 
@@ -118,81 +118,103 @@ class AbstractTestClass(unittest.TestCase):
                          call(**self.find_params))
 
         # Verify the result
-        self.assertEqual(client.new_obj['dn'], self.find_result['dn'])
+        print "client.current_obj:"; pprint (client.current_obj)
+
+        self.assertEqual(self.find_result['dn'], client.current_obj['dn'])
+
 
     #################################################################
-    # diff class
+    # compute_changes()
     #################################################################
 
-    def test_03_diff(self):
-        client = self.get_tst_class()
+    def test_03_compute_changes(self):
+        client = self.get_tst_class(
+            find_result=self.find_result)
+        client.find()
 
-        # Create diff object
-        diff = self.test_diff_class(
-            self.find_result, client.module.params, client.method_map,
-            client.method_trans, 'rem')
+        # Exercise compute_changes()
+        request = client.compute_changes()
 
-        # Check clean() method results
-        self.assertEqual(diff.curr, self.curr_cleaned)
-        self.assertEqual(diff.change, self.change_cleaned)
-        
-        # Check present(), exact(), absent() method results
-        for state in self.diff_results:
-            for action_type, result in self.diff_results[state].items():
-                diff.action_type = action_type
-                print "state=%s; action_type=%s; changes=%s" % \
-                    (state, action_type, diff.state(state))
-                self.assertEqual(diff.state(state), result)
+        # Verify changes
+        print "client.changes:"; pprint (client.changes)
+        self.assertEqual(self.compute_changes_results, client.changes)
 
     #################################################################
     # add_or_mod()
     #################################################################
 
-    def test_04_mod(self):
-        client = self.get_tst_class()
-        # Add mock `find()` results
-        client.current_obj = self.find_result
+    def add_or_mod_helper(
+            self,
+            expected_result_attr=None,
+            find_result={},
+            expected_state=None,
+            module_params_updates={} ):
+        if not hasattr(self, expected_result_attr):
+            return unittest.skip('Unimplemented or inapplicable')
+        expected_result = getattr(self, expected_result_attr)
 
-        # Verify action_type
-        self.assertEqual(client.action_type, 'mod')
+        # Get patched test class
+        client = self.get_tst_class(
+            find_result=find_result,
+            module_params_updates=module_params_updates)
+        # Run find():  set up for add_or_mod
+        client.find()
+        # Sanity check: verify expected state
+        self.assertEqual(expected_state, client.state)
+        # Reset mock object
+        self.mock_post_json.reset_mock()
 
         # Exercise add_or_mod()
-        client.add_or_mod(self.diff_results['present']['mod'][0])
+        client.add_or_mod()
 
         # Verify the call
         self.assertEqual(client._post_json.call_count, 1)
-        self.assertEqual(client._post_json.call_args,
-                         call(**self.mod_params))
+        print "client._post_json.call_args:"
+        pprint (client._post_json.call_args[1])
+        self.assertEqual(expected_result, client._post_json.call_args[1])
 
-    def test_05_add(self):
-        client = self.get_tst_class()
-        # Add empty mock `find()` results
-        client.current_obj = {}
+    def test_04_present_existing(self):
+        self.add_or_mod_helper(
+            'present_existing_params',
+            expected_state='present',
+            find_result=self.find_result)
 
-        # Verify action_type
-        self.assertEqual(client.action_type, 'add')
+    def test_05_enabled_existing(self):
+        self.add_or_mod_helper(
+            'enabled_existing_params',
+            expected_state='enabled',
+            find_result=self.find_result)
 
-        # Exercise add_or_mod()
-        client.add_or_mod(self.diff_results['present']['add'][0])
+    def test_06_present_new(self):
+        self.add_or_mod_helper(
+            'present_new_params',
+            expected_state='present')
 
-        # Verify the call
-        self.assertEqual(client._post_json.call_count, 1)
-        self.assertEqual(client._post_json.call_args,
-                         call(**self.add_params))
+    def test_07_disabled_new(self):
+        self.add_or_mod_helper(
+            'disabled_new_params',
+            expected_state='disabled',
+            module_params_updates={'state':'disabled'})
 
-    def test_06_rem(self):
+    def test_08_exact_existing(self):
+        self.maxDiff=None
+        self.add_or_mod_helper(
+            'exact_existing_params',
+            expected_state='exact',
+            find_result=self.find_result,
+            module_params_updates={'state':'exact'})
+
+    def test_09_rem(self):
         client = self.get_tst_class(
             module_params_updates=dict(state='absent'))
-        # Add mock `find()` results
-        client.current_obj = self.find_result
-
-        # Verify action_type
-        self.assertEqual(client.action_type, 'rem')
+        client.find()
+        self.mock_post_json.reset_mock()
 
         # Exercise rem()
         client.rem()
 
         # Verify the call
         self.assertEqual(client._post_json.call_count, 1)
-        self.assertEqual(client._post_json.call_args,
-                         call(**self.rem_params))
+        print "client._post_json.call_args:"
+        pprint (client._post_json.call_args[1])
+        self.assertEqual(self.rem_params, client._post_json.call_args[1])

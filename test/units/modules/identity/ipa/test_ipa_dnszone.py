@@ -14,22 +14,14 @@ class TestDNSZoneIPAClient(t_st_ipa_abstract.AbstractTestClass):
     ipa_module = 'ipa_dnszone'
 
     module_params = dict(
+        idnsname = "test.example.com",
         idnsallowdynupdate = True,
         idnsallowtransfer = "none;",
-        idnsname = "test.example.com",
         nsrecord = "host2.example.com.",
         state = "enabled",
         ipa_host = "host1.example.com",
         ipa_user = "admin",
         ipa_pass = "secretpass",
-    )
-
-    find_params = dict(
-        method='dnszone_find',
-        name=[None],
-        item=dict(all = True,
-                  idnsname = 'test.example.com' ),
-        item_filter=None,
     )
 
     find_result = dict(
@@ -79,35 +71,62 @@ class TestDNSZoneIPAClient(t_st_ipa_abstract.AbstractTestClass):
         nsrecord = "host2.example.com.",
         )
 
-    diff_results = dict(
-        present = dict(
-            add = (
-                {'nsrecord': 'host2.example.com.', 'idnsallowdynupdate': True},
-                {}, {}),
-            mod = (
-                {'nsrecord': 'host2.example.com.', 'idnsallowdynupdate': True},
-                {}, {}),
-        ),
-        # FIXME exact
-        absent = dict(
-            rem = ({}, {}, {})
-        ),
+    compute_changes_results = {
+        'addattr': {'idnsallowdynupdate': [True],
+                     'nsrecord': ['host2.example.com.']},
+        'delattr': {}}
+
+    find_params = dict(
+        method='dnszone_find',
+        name=[None],
+        item=dict(all = True,
+                  idnsname = 'test.example.com' ),
+        item_filter=None,
     )
 
-    mod_params = dict(
-        item={'nsrecord': 'host2.example.com.', 'idnsallowdynupdate': True},
-        method='dnszone_mod',
-        name=['test.example.com'],
-    )
+    enabled_existing_params = {
+        'item' : {'delattr': [],
+                  'all': True,
+                  'addattr': ['idnsallowdynupdate=True',
+                              'nsrecord=host2.example.com.']},
+        'item_filter': None,
+        'method' : 'dnszone_mod',
+        'name' : ['test.example.com']}
 
-    add_params = dict(
-        item={'nsrecord': 'host2.example.com.', 'idnsallowdynupdate': True},
-        method='dnszone_add',
-        name=['test.example.com'],
-    )
+    disabled_new_params = {
+        'item' : {'delattr': [],
+                  'all': True,
+                  'addattr': ['idnsallowdynupdate=True',
+                              'idnsallowtransfer=none;',
+                              'idnszoneactive=FALSE',
+                              'nsrecord=host2.example.com.']},
+        'item_filter': None,
+        'method' : 'dnszone_add',
+        'name' : ['test.example.com']}
 
-    rem_params = dict(
-        item={},
-        method='dnszone_del',
-        name=['test.example.com'],
-    )
+    exact_existing_params = {
+        'item' : {'delattr': ['idnsallowdynupdate=FALSE',
+                              'idnsallowquery=any;',
+                              'idnssoaexpire=1209600',
+                              'idnssoaminimum=3600',
+                              'idnssoamname=host1.example.com.',
+                              'idnssoarefresh=3600',
+                              'idnssoaretry=900',
+                              'idnssoarname=hostmaster',
+                              'idnssoaserial=1493244462',
+                              ('idnsupdatepolicy=grant EXAMPLE.COM krb5-self * A;'
+                               ' grant EXAMPLE.COM krb5-self * AAAA;'
+                               ' grant EXAMPLE.COM krb5-self * SSHFP;'),
+                              'nsrecord=host1.example.com.'],
+                  'all': True,
+                  'addattr': ['idnsallowdynupdate=True',
+                              'nsrecord=host2.example.com.']},
+        'item_filter': None,
+        'method' : 'dnszone_mod',
+        'name' : ['test.example.com']}
+
+    rem_params = {
+        'item' : {},
+        'method' : 'dnszone_del',
+        'name' : ['test.example.com'],
+        'item_filter' : None}
