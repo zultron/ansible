@@ -116,13 +116,13 @@ class IPAClient(object):
         )
 
     def init_kw_args(self):
-        self.method_map = {}
-        self.method_trans = {}
+        self.param_data = {}
+        self.param_key_map = {}
         self._name_map = {}
         self.enablekey = None
         for name, spec_orig in self.kw_args.items():
             spec = spec_orig.copy()
-            self.method_map[name] = dict(
+            self.param_data[name] = dict(
                 type = spec['type'],
                 when = spec.pop('when', ['add','mod']),
                 when_name = spec.pop('when_name', []),
@@ -138,7 +138,7 @@ class IPAClient(object):
             if spec.pop('enablekey',False):
                 self.enablekey = name
             self.argument_spec[name] = spec
-            self.method_trans[spec.pop('from_result_attr', name)] = name
+            self.param_key_map[spec.pop('from_result_attr', name)] = name
                 
     def param(self, name, default=None):
         return self.module.params.get(name, default)
@@ -250,11 +250,11 @@ class IPAClient(object):
                     name[1][self.name_map(action,1)[key]] = val
                     continue
             # Translate attr keys from current to change object
-            if curr:  key = self.method_trans.get(key, None)
+            if curr:  key = self.param_key_map.get(key, None)
             # Ignore params not central to object definition ('dn', 'ipa_host')
-            if key not in self.method_map:  continue
+            if key not in self.param_data:  continue
             # Ignore params irrelevant to this action
-            if action not in self.method_map[key]['when']:  continue
+            if action not in self.param_data[key]['when']:  continue
             # All attributes in lists in find results, even scalars
             if action != 'find' and not isinstance(val, list):  val = [val]
             # Handle enable flag attr
@@ -263,18 +263,18 @@ class IPAClient(object):
                     item['enabled'] = val[0]
                 else:  continue # Skip it
             # Munge current attr values into change-compatible values
-            if curr and self.method_map[key]['value_filter'] is not None:
-                val = map(self.method_map[key]['value_filter'], val)
+            if curr and self.param_data[key]['value_filter'] is not None:
+                val = map(self.param_data[key]['value_filter'], val)
             # Ignore empty values
             if val[0] is None:  continue
             # Convert 'TRUE' and 'FALSE' to booleans
-            if self.method_map[key]['type'] == 'bool' \
+            if self.param_data[key]['type'] == 'bool' \
                and isinstance(val[0], basestring):
                 if val[0].lower() == 'true': val[0] = True
                 elif val[0].lower() == 'false': val[0] = False
-            if self.method_map[key]['req_key'] is not None:
+            if self.param_data[key]['req_key'] is not None:
                 # Add key:{__req_key__:val} to item
-                item[key] = { self.method_map[key]['req_key']:val }
+                item[key] = { self.param_data[key]['req_key']:val }
             else:
                 # Add key:val to item
                 item[key] = val
@@ -294,14 +294,14 @@ class IPAClient(object):
         self.found_obj = self._post_json(**request)
 
     def op(self, a, b, op):
-        keys = set(self.method_map.keys())
+        keys = set(self.param_data.keys())
         res = {}
         for key in set(a) | set(b):
-            # if key not in self.method_map: continue
+            # if key not in self.param_data: continue
             # FIXME can we treat scalars this way?
-            # if self.method_map[key]['type'] != 'list': continue
+            # if self.param_data[key]['type'] != 'list': continue
             # FIXME
-            # if 'add' not in self.method_map[key]['when']: continue
+            # if 'add' not in self.param_data[key]['when']: continue
             # => res_val = a[key] <op> b[key]
             res_val = list(getattr(set(a.get(key, [])), op)(b.get(key, [])))
             if res_val: res.setdefault(key,[]).extend(res_val)
@@ -328,7 +328,7 @@ class IPAClient(object):
 
         for key in changes['addattr'].keys():
             # Find only non-list keys
-            if self.method_map[key]['type'] == 'list':  continue
+            if self.param_data[key]['type'] == 'list':  continue
             # Sanity check:  exactly one entry in add list
             if len(changes['addattr'][key]) != 1:
                 self._fail(key, 'Found multiple entries of non-list attribute')
