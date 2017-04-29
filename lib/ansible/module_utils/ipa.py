@@ -291,7 +291,8 @@ class IPAClient(object):
         request = self.clean(self.module.params, 'find')
         request['item'].update(dict(all=True))
         request['item'].update(self.extra_find_args)
-        self.found_obj = self._post_json(**request)
+        self.final_obj = self.updated_obj = self.found_obj = \
+                         self._post_json(**request)
 
     def op(self, a, b, op):
         keys = set(self.param_data.keys())
