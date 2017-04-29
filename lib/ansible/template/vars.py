@@ -58,6 +58,11 @@ class AnsibleJ2Vars:
                         self._locals[key] = val
 
     def __contains__(self, k):
+        try:
+            if self._templar._variable_manager and k in self._templar._variable_manager:
+                return True
+        except KeyError:
+            pass
         if k in self._templar._available_variables:
             return True
         if k in self._locals:
@@ -70,7 +75,8 @@ class AnsibleJ2Vars:
         return False
 
     def __getitem__(self, varname):
-        if varname not in self._templar._available_variables:
+        exists = (self._templar._variable_manager and varname in self._templar._variable_manager) or varname in self._templar._available_variables
+        if not exists:
             if varname in self._locals:
                 return self._locals[varname]
             for i in self._extras:
@@ -81,7 +87,10 @@ class AnsibleJ2Vars:
             else:
                 raise KeyError("undefined variable: %s" % varname)
 
-        variable = self._templar._available_variables[varname]
+        if self._templar._variable_manager:
+            variable = self._templar._variable_manager[varname]
+        else:
+            variable = self._templar._available_variables[varname]
 
         # HostVars is special, return it as-is, as is the special variable
         # 'vars', which contains the vars structure

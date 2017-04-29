@@ -217,11 +217,12 @@ class Templar:
     The main class for templating, with the main entry-point of template().
     '''
 
-    def __init__(self, loader, shared_loader_obj=None, variables=dict()):
+    def __init__(self, loader, shared_loader_obj=None, variables=dict(), variable_manager=None):
         self._loader              = loader
         self._filters             = None
         self._tests               = None
         self._available_variables = variables
+        self._variable_manager    = variable_manager
         self._cached_result       = {}
 
         if loader:
