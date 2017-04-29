@@ -32,23 +32,6 @@ class TestDNSRecordIPAClient(t_st_ipa_abstract.AbstractTestClass):
         'objectClass': ['top', 'idnsrecord'],
         'txtrecord': ['old text', 'old text 2']}
 
-    curr_cleaned = dict(
-        arecord = ['192.168.42.37'],
-        mxrecord = ['10 mx.example.com'],
-        txtrecord = ['old text', 'old text 2'],
-    )
-
-    change_cleaned = dict(
-        arecord = ['192.168.42.38', '192.168.43.38'],
-        txtrecord = ['new text'],
-        )
-
-    compute_changes_results = {
-        'addattr': {'arecord': ['192.168.42.38'],
-                    'txtrecord': ['new text']},
-        'delattr': {},
-        'setattr': {}}
-
     find_params = dict(
         method='dnsrecord_find',
         name=['example.com'],

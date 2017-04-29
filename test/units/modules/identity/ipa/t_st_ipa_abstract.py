@@ -116,30 +116,15 @@ class AbstractTestClass(unittest.TestCase):
 
         # Verify the call
         self.assertEqual(client._post_json.call_count, 1)
+        print "--- call_args:"
+        pprint (client._post_json.call_args[1])
         self.assertEqual(client._post_json.call_args,
                          call(**self.find_params))
 
         # Verify the result
         print "client.found_obj:"; pprint (client.found_obj)
-
         self.assertEqual(self.found_obj['dn'], client.found_obj['dn'])
 
-
-    #################################################################
-    # compute_changes()
-    #################################################################
-
-    def test_03_compute_changes(self):
-        client = self.get_tst_class(
-            found_obj=self.found_obj)
-        client.find()
-
-        # Exercise compute_changes()
-        request = client.compute_changes()
-
-        # Verify changes
-        print "client.changes:"; pprint (client.changes)
-        self.assertEqual(self.compute_changes_results, client.changes)
 
     #################################################################
     # add_or_mod()
@@ -281,6 +266,7 @@ class AbstractTestClass(unittest.TestCase):
             print "--- call_args:"
             pprint (new_client._post_json.call_args[1])
         self.assertEqual(new_client._post_json.call_count, 0)
+        print "*** Idempotency add_or_mod():  success"
 
         #
         # Run and verify enable_or_disable()
@@ -302,6 +288,7 @@ class AbstractTestClass(unittest.TestCase):
             print "--- call_args:"
             pprint (new_client._post_json.call_args[1])
         self.assertEqual(new_client._post_json.call_count, 0)
+        print "*** Idempotency enable_or_disable():  success"
 
     def test_04_present_existing(self):
         # Test state==present on existing object

@@ -44,36 +44,6 @@ class TestDNSZoneIPAClient(t_st_ipa_abstract.AbstractTestClass):
         'nsrecord': ['host1.example.com.'],
         'objectclass': ['idnszone', 'top', 'idnsrecord']}
 
-    curr_cleaned = dict(
-        idnsallowdynupdate = 'FALSE',
-        idnsallowquery = 'any;',
-        idnsallowtransfer = 'none;',
-        idnssoaexpire = '1209600',
-        idnssoaminimum = '3600',
-        idnssoamname = 'host1.example.com.',
-        idnssoarefresh = '3600',
-        idnssoaretry = '900',
-        idnssoarname = 'hostmaster',
-        idnssoaserial = '1493244462',
-        idnsupdatepolicy = ('grant EXAMPLE.COM krb5-self * A; '
-                            'grant EXAMPLE.COM krb5-self * AAAA; '
-                            'grant EXAMPLE.COM krb5-self * SSHFP;'),
-        idnszoneactive = 'TRUE',
-        nsrecord = 'host1.example.com.',
-    )
-
-    change_cleaned = dict(
-        idnsallowdynupdate = True,
-        idnsallowtransfer = "none;",
-        nsrecord = "host2.example.com.",
-        )
-
-    compute_changes_results = {
-        'setattr': {'idnsallowdynupdate': [True],
-                     'nsrecord': ['host2.example.com.']},
-        'delattr': {},
-        'addattr': {}}
-
     find_params = dict(
         method='dnszone_find',
         name=[None],
