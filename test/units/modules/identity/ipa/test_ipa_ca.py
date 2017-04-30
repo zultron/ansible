@@ -11,7 +11,6 @@ from ansible.modules.identity.ipa.ipa_ca import CAIPAClient
 class TestCAIPAClient(t_st_ipa_abstract.AbstractTestClass):
 
     test_class = CAIPAClient
-    ipa_module = 'ipa_ca'
 
     module_params = dict(
         cn = "Test CA",

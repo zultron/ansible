@@ -11,7 +11,6 @@ from ansible.modules.identity.ipa.ipa_dnszone import DNSZoneIPAClient
 class TestDNSZoneIPAClient(t_st_ipa_abstract.AbstractTestClass):
 
     test_class = DNSZoneIPAClient
-    ipa_module = 'ipa_dnszone'
 
     module_params = dict(
         idnsname = "test.example.com",

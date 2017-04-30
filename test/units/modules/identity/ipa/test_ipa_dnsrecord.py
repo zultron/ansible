@@ -11,7 +11,6 @@ from ansible.modules.identity.ipa.ipa_dnsrecord import DNSRecordIPAClient
 class TestDNSRecordIPAClient(t_st_ipa_abstract.AbstractTestClass):
 
     test_class = DNSRecordIPAClient
-    ipa_module = 'ipa_dnsrecord'
 
     module_params = dict(
         zone = "example.com",

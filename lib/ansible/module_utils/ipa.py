@@ -317,6 +317,8 @@ class IPAClient(object):
         curr_params = current['item']
 
         changes = {'addattr':{}, 'delattr':{}, 'setattr':{}}
+
+        # Compute changes for list parameters
         if self.state in ('exact', 'present', 'enabled', 'disabled'):
             changes['addattr'].update(
                 self.op(change_params, curr_params, 'difference'))
@@ -327,6 +329,7 @@ class IPAClient(object):
             changes['delattr'].update(
                 self.op(change_params, curr_params, 'intersection'))
 
+        # Compute changes for scalar parameters
         for key in changes['addattr'].keys():
             # Find only non-list keys
             if self.param_data[key]['type'] == 'list':  continue

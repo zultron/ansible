@@ -12,8 +12,6 @@ class AbstractTestClass(unittest.TestCase):
 
     # test_class = SomeNameIPAClient
     test_class = None
-    # ipa_module = 'ipa_somename'
-    ipa_module = None
 
     # Module parameters as supplied in task
     module_params = dict(
@@ -262,7 +260,7 @@ class AbstractTestClass(unittest.TestCase):
             print "--- module_params:"
             pprint (module_params)
             print "--- found_obj:"
-            pprint (found_obj)
+            pprint (new_client.found_obj)
             print "--- call_args:"
             pprint (new_client._post_json.call_args[1])
         self.assertEqual(new_client._post_json.call_count, 0)
