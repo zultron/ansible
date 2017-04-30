@@ -250,7 +250,7 @@ class IPAClient(object):
                     name[1][self.name_map(action,1)[key]] = val
                     continue
             # Translate attr keys from current to change object
-            if curr:  key = self.param_key_map.get(key, None)
+            if curr:  key = self.param_key_map.get(key, key)
             # Ignore params not central to object definition ('dn', 'ipa_host')
             if key not in self.param_data:  continue
             # Ignore params irrelevant to this action
