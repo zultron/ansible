@@ -28,7 +28,8 @@ class AbstractTestClass(object):
     def get_tst_class(self, mod_cls,
                       module_params={},
                       module_params_updates={},
-                      found_obj=None):
+                      found_obj=None,
+                      side_effect=None):
         # Mock AnsibleModule instance with attributes
         mod = mod_cls.return_value
         mod.check_mode = False
@@ -43,8 +44,11 @@ class AbstractTestClass(object):
         assert client.module is mod
 
         # Patch _post_json method (object only, not class)
-        if found_obj is None:  found_obj = self.found_obj
-        self.mock_post_json = MagicMock(return_value=found_obj)
+        if side_effect is not None:
+            self.mock_post_json = MagicMock(side_effect=side_effect)
+        else:
+            if found_obj is None:  found_obj = self.found_obj
+            self.mock_post_json = MagicMock(return_value=found_obj)
         client._post_json = self.mock_post_json
 
         return client
@@ -54,6 +58,7 @@ class AbstractTestClass(object):
     #################################################################
 
     def test_01_init(self):
+        # Test some basic module consistency items
         client = self.get_tst_class()
 
         # Verify client._methods keys
@@ -84,44 +89,6 @@ class AbstractTestClass(object):
             self.assertNotIn('disabled', client._methods)
             # And the flag param must not be specified
             self.assertIsNone(client.enablekey)
-
-
-    #################################################################
-    # find()
-    #################################################################
-
-    # Parameters expected for a `find` API request
-    find_params = dict(
-        # method = 'somename_find',
-        # name = None,
-        # item = dict( all = True, param1 = 'val1' ),
-        # item_filter = None,
-    )
-
-    # Sample results from a `find` API request
-    found_obj = dict(
-        # dn = "cn=host1.example.com.,cn=dns,dc=example,dc=com",
-        # param1 = [ "val1" ], 
-        # objectclass = [ "someclass1", "top", "someclass2" ],
-    )
-
-
-    def test_02_find(self):
-        client = self.get_tst_class()
-
-        # Exercise find()
-        client.find()
-
-        # Verify the call
-        self.assertEqual(client._post_json.call_count, 1)
-        print "--- call_args:"
-        pprint (client._post_json.call_args[1])
-        self.assertEqual(client._post_json.call_args,
-                         call(**self.find_params))
-
-        # Verify the result
-        print "client.found_obj:"; pprint (client.found_obj)
-        self.assertEqual(self.found_obj['dn'], client.found_obj['dn'])
 
 
     #################################################################
@@ -288,98 +255,92 @@ class AbstractTestClass(object):
         self.assertEqual(new_client._post_json.call_count, 0)
         print "*** Idempotency enable_or_disable():  success"
 
-    def test_04_present_existing(self):
-        # Test state==present on existing object
-        # present_existing_data = {
-        #     'found_obj' : found_obj,
-        #     'aom_params' : {
-        #         'item' : {'all': True,
-        #                   'addattr': [...],  # Add items here or
-        #                   'setattr': [...],  # here as appropriate
-        #                   'delattr': []},    # Leave this empty
-        #         'item_filter': None,
-        #         'method' : 'objtype_mod',
-        #         'name' : ['myobject_key']},
-        # }
-        client = self.add_or_mod_helper('present_existing_data')
-        self.idempotency_helper(client, 'present_existing_data')
+    def runner(self, module_params = None,
+               post_json_calls=None, idempotency=None):
 
-    def test_05_enabled_existing(self):
-        # Test state==enabled on existing object
-        # enabled_existing_data = {
-        #     'module_params_updates' : {'state' : 'enabled'},
-        #     'found_obj' : found_obj,
-        #     'aom_params' : { (like 'present_existing' test) },
-        #     # Set up so `objtype_enable` method runs...
-        #     'found_obj_updates' : {'objtypeactive' : ['FALSE']},
-        #     # ...and verify enable/disable API call params
-        #     'eod_params' : {
-        #         'item' : {},
-        #         'item_filter': None,
-        #         'method' : 'dnszone_enable',
-        #         'name' : ['test.example.com']},
-        # }
-        client = self.add_or_mod_helper('enabled_existing_data')
-        self.idempotency_helper(client, 'enabled_existing_data')
+        #
+        # Set up patched test object
+        #
+        # - Pre-ordained set of replies from _post_json()
+        reply_list = []
+        for c in post_json_calls:
+            # Recycle previous reply if no new one given
+            reply = deepcopy(c.get('reply',([None]+reply_list)[-1]))
+            reply.update(deepcopy(c.get('reply_updates',{})))
+            reply_list.append(reply)
+        # - Patched test class instance
+        client1 = self.get_tst_class(
+            module_params = deepcopy(module_params),
+            side_effect = deepcopy(reply_list))
 
-    def test_06_present_new(self):
-        # Test state==present on new object
-        # present_new_data = {
-        #     'found_obj' : {},
-        #     'aom_params' : {
-        #          (like 'present_existing' test, but different method)
-        #         'method' : 'objtype_add'},
-        # }
-        client = self.add_or_mod_helper('present_new_data')
-        self.idempotency_helper(client, 'present_new_data')
+        #
+        # Run main()
+        #
+        client1.main()
 
-    def test_07_disabled_new(self):
-        # Test state==disabled on new object
-        # present_new_data = {
-        #     'found_obj' : {},
-        #     'aom_params' : {
-        #          (like 'present_existing' test, but different method)
-        #         'method' : 'objtype_add'},
-        #     # Set up so `objtype_disable` method runs...
-        #     'found_obj_updates' : {'objtypeactive' : ['TRUE']},
-        #     # ...and verify enable/disable API call params
-        #     'eod_params' : {
-        #         'item' : {},
-        #         'item_filter': None,
-        #         'method' : 'dnszone_disable',
-        #         'name' : ['test.example.com']},
-        # }
-        client = self.add_or_mod_helper('disabled_new_data')
-        self.idempotency_helper(client, 'disabled_new_data')
+        #
+        # Verify run
+        #
+        print "Number of calls: %d" % client1._post_json.call_count
+        for request, call in \
+            zip(client1._post_json.call_args_list, post_json_calls):
+            print "\n*** Request:"
+            print "--- Sent:"
+            pprint(request[1])
+            print "--- Expected:"
+            pprint(call['request'])
 
-    def test_08_exact_existing(self):
-        # Test state==exact on existing object
-        # present_existing_data = {
-        #     'found_obj' : found_obj,
-        #     'aom_params' : {
-        #         'item' : {'all': True,
-        #                   'addattr': [...],  # Add items to any
-        #                   'setattr': [...],  # of these, as appropriate
-        #                   'delattr': [...]},
-        #         'item_filter': None,
-        #         'method' : 'objtype_mod',
-        #         'name' : ['myobject_key']},
-        # }
-        client = self.add_or_mod_helper('exact_existing_data')
-        self.idempotency_helper(client, 'exact_existing_data')
+        # - Number of calls to _post_json
+        self.assertEqual(client1._post_json.call_count, len(post_json_calls))
 
-    def test_20_rem(self):
-        client = self.get_tst_class(
-            module_params_updates=dict(state='absent'))
-        client.find()
-        self.mock_post_json.reset_mock()
+        # - Call parameters
+        for request, call in \
+            zip(client1._post_json.call_args_list, post_json_calls):
+            self.assertEqual(request[1],call['request'])
 
-        # Exercise rem()
-        client.rem()
+        # - DN of found object
+        if 'dn' in reply_list[0]:
+            self.assertEqual(reply_list[0]['dn'],
+                             client1.found_obj.get('dn',None))
 
-        # Verify the call
-        self.assertEqual(client._post_json.call_count, 1)
-        print "client._post_json.call_args:"
-        pprint (client._post_json.call_args[1])
-        self.assertEqual(self.rem_params, client._post_json.call_args[1])
+        ###################################
+        # Idempotency
+        #
 
+        #
+        # Set up 2nd patched test object
+        #
+
+        # - Copy final result from previous object
+        found_obj = deepcopy(client1.final_obj)
+        # found_obj.update(deepcopy(idempotency.get('obj_updates',{})))
+        # - Patched test class instance
+        client2 = self.get_tst_class(
+            module_params = deepcopy(module_params),
+            side_effect = [found_obj])
+
+        #
+        # Run main()
+        #
+        client2.main()
+
+        #
+        # Run and verify add_or_mod()
+        #
+
+        # Verify ONLY the find call happened (or print debug info & fail)
+        print "*** Idempotency:"
+        print "--- Current result:"
+        pprint(client2.final_obj)
+        if client2._post_json.call_count != 1:
+            for request, call in \
+                zip(client2._post_json.call_args_list, post_json_calls):
+                print "--- Sent request:"
+                pprint(request[1])
+                print "--- Expected request:"
+                pprint(call['request'])
+            print "\n*** Idempotency error"
+        self.assertEqual(client2._post_json.call_count, 1)
+        print "\n*** SUCCESS"
+
+        return client1
