@@ -122,11 +122,11 @@ class DNSRecordIPAClient(IPAClient):
 
     kw_args = dict(
         zone=dict(
-            type='str', required=True, aliases=['name'],
+            type='str', required=True,
             when_name=['add', 'mod','rem','find']),
         idnsname = dict(
-            type='str', required=True, when=['find'], req_key='__dns_name__',
-            when_name=['add','mod','rem'],),
+            type='str', required=True, req_key='__dns_name__', aliases=['name'],
+            when=['find'], when_name=['add','mod','rem'],),
         arecord = dict(
             type='list', required=False),
         aaaarecord = dict(
