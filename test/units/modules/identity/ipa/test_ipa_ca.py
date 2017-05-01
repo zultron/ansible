@@ -4,11 +4,11 @@ __metaclass__ = type
 
 from ansible.compat.tests import unittest
 from ansible.compat.tests.mock import call, create_autospec, patch
-from . import t_st_ipa_abstract
+from . import AbstractTestClass
 
 from ansible.modules.identity.ipa.ipa_ca import CAIPAClient
 
-class TestCAIPAClient(t_st_ipa_abstract.AbstractTestClass):
+class TestCAIPAClient(unittest.TestCase, AbstractTestClass):
 
     test_class = CAIPAClient
 
