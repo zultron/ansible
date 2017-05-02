@@ -3,7 +3,6 @@ from __future__ import (absolute_import, division)
 __metaclass__ = type
 
 from ansible.compat.tests import unittest
-from ansible.compat.tests.mock import call, create_autospec, patch
 from . import AbstractTestClass
 
 from ansible.modules.identity.ipa.ipa_dnszone import DNSZoneIPAClient
@@ -12,38 +11,10 @@ class TestDNSZoneIPAClient(unittest.TestCase, AbstractTestClass):
 
     test_class = DNSZoneIPAClient
 
-    module_params = dict(
-        idnsname = "test.example.com",
-        idnsallowdynupdate = True,
-        idnsallowtransfer = "none;",
-        nsrecord = "host2.example.com.",
-        state = "enabled",
-        ipa_host = "host1.example.com",
-        ipa_user = "admin",
-        ipa_pass = "secretpass",
-    )
+    # Track state from test to test
+    current_state = {}
 
-    found_obj = {
-        'dn': 'idnsname=test.example.com.,cn=dns,dc=example,dc=com',
-        'idnsallowdynupdate': ['FALSE'],
-        'idnsallowquery': ['any;'],
-        'idnsallowtransfer': ['none;'],
-        'idnsname': ['test.example.com.'],
-        'idnssoaexpire': ['1209600'],
-        'idnssoaminimum': ['3600'],
-        'idnssoamname': ['host1.example.com.'],
-        'idnssoarefresh': ['3600'],
-        'idnssoaretry': ['900'],
-        'idnssoarname': ['hostmaster'],
-        'idnssoaserial': ['1493244462'],
-        'idnsupdatepolicy': ['grant EXAMPLE.COM krb5-self * A;'
-                             ' grant EXAMPLE.COM krb5-self * AAAA;'
-                             ' grant EXAMPLE.COM krb5-self * SSHFP;'],
-        'idnszoneactive': ['TRUE'],
-        'nsrecord': ['host1.example.com.'],
-        'objectclass': ['idnszone', 'top', 'idnsrecord']}
-
-    find_params = dict(
+    find_request = dict(
         method='dnszone_find',
         name=[None],
         item=dict(all = True,
@@ -51,147 +22,154 @@ class TestDNSZoneIPAClient(unittest.TestCase, AbstractTestClass):
         item_filter=None,
     )
 
-    # These changes make most operations idempotent
-    idempotent_obj_updates = {
-        'idnsallowdynupdate' : ['TRUE'],
-        'idnszoneactive': ['TRUE'],
-        'nsrecord' : ['host2.example.com.']}
+    def test_10_dnszone_enabled_new(self):
+        test = 10
+        # Create new object
+        client = self.runner(
+            module_params = dict(
+                idnsname = "test.example.com",
+                state = "enabled",                  # Enabled:
+                idnsallowdynupdate = True,          # Add
+                idnsallowtransfer = "none;",        # Add
+                nsrecord = "host2.example.com.",    # Add
+                ipa_host = "host1.example.com",
+                ipa_user = "admin",
+                ipa_pass = "secretpass",
+            ),
+            post_json_calls = [
+                dict(
+                    name = 'find new object',
+                    request = self.find_request,
+                    reply = {},
+                ),
+                dict(
+                    name = 'add new object',
+                    request = {
+                        'item' : {'setattr': ['idnsallowdynupdate=True',
+                                              'idnsallowtransfer=none;',
+                                              'nsrecord=host2.example.com.'],
+                                  'delattr': [], 'addattr': [], 'all': True},
+                        'item_filter': None,
+                        'method' : 'dnszone_add',
+                        'name' : ['test.example.com']},
+                    reply_updates = {
+                        'idnsallowdynupdate': ['True'],
+                        'idnsallowtransfer': ['none;'],
+                        'nsrecord': ['host2.example.com.']},
+                ),
+                dict(
+                    name = 'enable new object',
+                    request = {
+                        'item' : {},
+                        'item_filter': None,
+                        'method' : 'dnszone_enable',
+                        'name' : ['test.example.com']},
+                    reply_updates = { 'idnszoneactive': ['TRUE'] },
+                ),
+            ],
+        )
 
-    present_existing_data = {
-        # Object already exists
-        'found_obj' : found_obj,
-        # Verify dnszone_mod API params
-        'aom_params' : {
-            'item' : {'delattr': [],
-                      'all': True,
-                      'setattr': ['idnsallowdynupdate=True',
-                                  'nsrecord=host2.example.com.'],
-                      'addattr': []},
-            'item_filter': None,
-            'method' : 'dnszone_mod',
-            'name' : ['test.example.com']},
-        # Idempotency changes
-        'idempotent_obj_updates' : {
-            'arecord': ['192.168.42.37', '192.168.43.38'],
-            'idnsallowdynupdate': ['TRUE'],
-            'nsrecord': ['host2.example.com.'],
-        },
-    }
+        # Persist client between tests
+        self.current_state['client%d' % test] = client
 
-    enabled_existing_data = {
-        # Object already exists, but disabled
-        'found_obj' : found_obj,
-        'found_obj_updates' : { 'idnszoneactive': ['FALSE'] },
-        # Request object be enabled
-        'module_params_updates' : {'state' : 'enabled'},
-        # Verify dnszone_mod API params
-        'aom_params' : {
-            'item' : {'delattr': [],
-                      'all': True,
-                      'setattr': ['idnsallowdynupdate=True',
-                                  'nsrecord=host2.example.com.'],
-                      'addattr': []},
-            'item_filter': None,
-            'method' : 'dnszone_mod',
-            'name' : ['test.example.com']},
-        # Verify dnszone_enable API params
-        'eod_params' : {
-            'item' : {},
-            'item_filter': None,
-            'method' : 'dnszone_enable',
-            'name' : ['test.example.com']},
-        # Idempotency changes
-        'idempotent_obj_updates' : idempotent_obj_updates,
-    }
+    def test_11_dnszone_existing_present_attr(self):
+        test = 11
+        client = self.runner(
+            module_params = dict(
+                idnsname = "test.example.com",
+                state = "enabled",                  # Enabled:
+                idnsallowdynupdate = False,         # Modify
+                idnsallowtransfer = "none;",        # Noop
+                ipa_host = "host1.example.com",
+                ipa_user = "admin",
+                ipa_pass = "secretpass",
+            ),
+            post_json_calls = [
+                dict(
+                    name = 'find existing object',
+                    request = self.find_request,
+                    reply = self.current_state['client%d' % (test-1)].final_obj,
+                ),
+                dict(
+                    name = 'modify existing object',
+                    request = {
+                        'item' : {'setattr': ['idnsallowdynupdate=False' ],
+                                  'addattr': [], 'delattr': [], 'all': True},
+                        'item_filter': None,
+                        'method' : 'dnszone_mod',
+                        'name' : ['test.example.com']},
+                    reply_updates = {
+                        'idnsallowdynupdate': ['FALSE'],
+                    },
+                ),
+                # No enable/disable operation
+            ],
+        )
 
-    present_new_data = {
-        # Object doesn't yet exist
-        'found_obj' : {},
-        # Verify dnszone_add API params
-        'aom_params' : {
-            'item' : {'delattr': [],
-                      'all': True,
-                      'setattr': ['idnsallowdynupdate=True',
-                                  'idnsallowtransfer=none;',
-                                  'nsrecord=host2.example.com.'],
-                      'addattr': []},
-            'item_filter': None,
-            'method' : 'dnszone_add',
-            'name' : ['test.example.com']},
-        # Idempotency
-        'idempotent_obj' : found_obj,
-        'idempotent_obj_updates' : idempotent_obj_updates,
-    }
+        # Persist client between tests
+        self.current_state['client%d' % test] = client
 
-    disabled_new_data = {
-        # Object doesn't yet exist
-        'found_obj' : {},
-        # Request object be added but disabled
-        'module_params_updates' : {'state' : 'disabled'},
-        # Verify dnszone_add API params
-        'aom_params' : {
-            'item' : {'delattr': [],
-                      'all': True,
-                      'setattr': ['idnsallowdynupdate=True',
-                                  'idnsallowtransfer=none;',
-                                  'nsrecord=host2.example.com.'],
-                      'addattr': []},
-            'item_filter': None,
-            'method' : 'dnszone_add',
-            'name' : ['test.example.com']},
-        # Pretend add_or_modify() created found_obj even though this
-        # doesn't follow the module params, but for the
-        # enable_or_disable() test, it's only important that
-        # `idnszoneactive == 'TRUE'`
-        'updated_obj' : found_obj,
-        # Verify dnszone_disable API params
-        'eod_params' : {
-            'item' : {},
-            'item_filter': None,
-            'method' : 'dnszone_disable',
-            'name' : ['test.example.com']},
-        # Idempotency
-        'idempotent_obj' : found_obj,
-        'idempotent_obj_updates' : {
-            'idnsallowdynupdate' : ['TRUE'],
-            'idnszoneactive': ['FALSE'],
-            'nsrecord' : ['host2.example.com.']},
-    }
+    def test_12_dnszone_disabled_existing(self):
+        test = 12
+        # Disable object w/no other changes
+        client = self.runner(
+            module_params = dict(
+                idnsname = "test.example.com",
+                state = "disabled",                  # Disabled
+                ipa_host = "host1.example.com",
+                ipa_user = "admin",
+                ipa_pass = "secretpass",
+            ),
+            post_json_calls = [
+                dict(
+                    name = 'find existing object',
+                    request = self.find_request,
+                    reply = self.current_state['client%d' % (test-1)].final_obj,
+                ),
+                dict(
+                    name = 'disable existing object',
+                    request = {
+                        'item' : {},
+                        'item_filter': None,
+                        'method' : 'dnszone_disable',
+                        'name' : ['test.example.com']},
+                    reply_updates = { 'idnszoneactive': ['FALSE'] },
+                ),
+            ],
+        )
 
-    exact_existing_data = {
-        # Object already exists
-        'found_obj' : found_obj,
-        # Request object state exactly as specified in module params
-        'module_params_updates' : {'state' : 'exact'},
-        # Verify dnszone_mod API params
-        'aom_params' : {
-            'item' : {'delattr': ['idnsallowquery=any;',
-                                  'idnssoaexpire=1209600',
-                                  'idnssoaminimum=3600',
-                                  'idnssoamname=host1.example.com.',
-                                  'idnssoarefresh=3600',
-                                  'idnssoaretry=900',
-                                  'idnssoarname=hostmaster',
-                                  'idnssoaserial=1493244462',
-                                  ('idnsupdatepolicy=grant EXAMPLE.COM krb5-self * A;'
-                                   ' grant EXAMPLE.COM krb5-self * AAAA;'
-                                   ' grant EXAMPLE.COM krb5-self * SSHFP;')],
-                      'all': True,
-                      'setattr': ['idnsallowdynupdate=True',
-                                  'nsrecord=host2.example.com.'],
-                      'addattr': []},
-            'item_filter': None,
-            'method' : 'dnszone_mod',
-            'name' : ['test.example.com']},
-        # Idempotency
-        'idempotent_obj' : {
-            'idnsallowdynupdate' : ['TRUE'],
-            'idnsallowtransfer' : ['none;'],
-            'nsrecord' : ['host2.example.com.']},
-    }
+        # Persist client between tests
+        self.current_state['client%d' % test] = client
 
-    rem_params = {
-        'item' : {},
-        'method' : 'dnszone_del',
-        'name' : ['test.example.com'],
-        'item_filter' : None}
+    def test_13_dnszone_remove_existing(self):
+        test = 13
+        # Remove object
+        client = self.runner(
+            module_params = dict(
+                idnsname = "test.example.com",
+                state = "absent",                  # Absent
+                ipa_host = "host1.example.com",
+                ipa_user = "admin",
+                ipa_pass = "secretpass",
+            ),
+            post_json_calls = [
+                dict(
+                    name = 'find existing object',
+                    request = self.find_request,
+                    reply = self.current_state['client%d' % (test-1)].final_obj,
+                ),
+                dict(
+                    name = 'disable existing object',
+                    request = {
+                        'item' : {},
+                        'method' : 'dnszone_del',
+                        'name' : ['test.example.com'],
+                        'item_filter' : None},
+                    reply = {},
+                ),
+            ],
+        )
+
+        # Persist client between tests
+        self.current_state['client%d' % test] = client
+

@@ -3,7 +3,6 @@ from __future__ import (absolute_import, division)
 __metaclass__ = type
 
 from ansible.compat.tests import unittest
-from ansible.compat.tests.mock import call, create_autospec, patch
 from . import AbstractTestClass
 
 from ansible.modules.identity.ipa.ipa_ca import CAIPAClient

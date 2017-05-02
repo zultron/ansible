@@ -3,7 +3,6 @@ from __future__ import (absolute_import, division)
 __metaclass__ = type
 
 from ansible.compat.tests import unittest
-from ansible.compat.tests.mock import call, create_autospec, patch
 from . import AbstractTestClass
 
 from ansible.modules.identity.ipa.ipa_dnsrecord import DNSRecordIPAClient
@@ -116,7 +115,7 @@ class TestDNSRecordIPAClient(unittest.TestCase, AbstractTestClass):
         # Persist client between tests
         self.current_state['client%d' % test] = client
 
-    def test_12_ca_existing_absent_listattr(self):
+    def test_12_dnsrecord_existing_absent_listattr(self):
         test = 12
         client = self.runner(
             module_params = dict(
