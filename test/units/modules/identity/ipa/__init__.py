@@ -28,7 +28,7 @@ class AbstractTestClass(object):
     def get_tst_class(self, mod_cls,
                       module_params={},
                       module_params_updates={},
-                      found_obj=None,
+                      found_obj={},
                       side_effect=None):
         # Mock AnsibleModule instance with attributes
         mod = mod_cls.return_value
@@ -47,7 +47,6 @@ class AbstractTestClass(object):
         if side_effect is not None:
             self.mock_post_json = MagicMock(side_effect=side_effect)
         else:
-            if found_obj is None:  found_obj = self.found_obj
             self.mock_post_json = MagicMock(return_value=found_obj)
         client._post_json = self.mock_post_json
 
@@ -58,7 +57,7 @@ class AbstractTestClass(object):
     #################################################################
 
     def test_01_init(self):
-        # Test some basic module consistency items
+        # Test module's basic consistency; instance doesn't matter
         client = self.get_tst_class()
 
         # Verify client._methods keys
@@ -255,12 +254,11 @@ class AbstractTestClass(object):
         self.assertEqual(new_client._post_json.call_count, 0)
         print "*** Idempotency enable_or_disable():  success"
 
-    def runner(self, module_params = None,
-               post_json_calls=None, idempotency=None):
-
+    def runner(self, module_params = None, post_json_calls=None):
         #
         # Set up patched test object
         #
+
         # - Pre-ordained set of replies from _post_json()
         reply_list = []
         for c in post_json_calls:
@@ -282,13 +280,15 @@ class AbstractTestClass(object):
         # Verify run
         #
         print "Number of calls: %d" % client1._post_json.call_count
-        for request, call in \
-            zip(client1._post_json.call_args_list, post_json_calls):
-            print "\n*** Request:"
+        for request, call, reply in \
+            zip(client1._post_json.call_args_list, post_json_calls, reply_list):
+            print "\n*** Request:  %s" % call['name']
             print "--- Sent:"
             pprint(request[1])
             print "--- Expected:"
             pprint(call['request'])
+            print "--- Reply:"
+            pprint(reply)
 
         # - Number of calls to _post_json
         self.assertEqual(client1._post_json.call_count, len(post_json_calls))

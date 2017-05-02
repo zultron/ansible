@@ -34,7 +34,7 @@ class TestCAIPAClient(unittest.TestCase, AbstractTestClass):
             ),
             post_json_calls = [
                 dict(
-                    # find
+                    name = 'find new object',
                     request = self.find_request,
                     reply = {
                         "cn": [ "Test CA" ],
@@ -45,7 +45,7 @@ class TestCAIPAClient(unittest.TestCase, AbstractTestClass):
                     },
                 ),
                 dict(
-                    # add_or_remove
+                    name = 'add new object',
                     request = {
                         'name' : ['Test CA'],
                         'item' : {'all': True,
@@ -77,13 +77,13 @@ class TestCAIPAClient(unittest.TestCase, AbstractTestClass):
                 ipa_pass = "secretpass",
             ),
             post_json_calls = [
-                # find
                 dict(
+                    name = 'find existing object',
                     request = self.find_request,
                     reply = self.current_state['client10'].final_obj,
                 ),
-                # add_or_remove
                 dict(
+                    name = 'absent/modify existing object',
                     request = {
                         'name' : ['Test CA'],
                         'item' : {'all': True,
@@ -114,13 +114,13 @@ class TestCAIPAClient(unittest.TestCase, AbstractTestClass):
                 ipa_pass = "secretpass",
             ),
             post_json_calls = [
-                # find
                 dict(
+                    name = 'find existing object',
                     request = self.find_request,
                     reply = self.current_state['client11'].final_obj,
                 ),
-                # add_or_remove
                 dict(
+                    name = 'exact/modify existing object',
                     request = {
                         'name' : ['Test CA'],
                         'item' : {'all': True,
@@ -150,13 +150,14 @@ class TestCAIPAClient(unittest.TestCase, AbstractTestClass):
                 ipa_pass = "secretpass",
             ),
             post_json_calls = [
-                # find
                 dict(
+                    name = 'find existing object',
                     request = self.find_request,
                     reply = self.current_state['client12'].final_obj,
                 ),
                 # rem()
                 dict(
+                    name = 'absent/del existing object',
                     request = {
                         'name' : [ "Test CA" ],
                         'item' : {},
