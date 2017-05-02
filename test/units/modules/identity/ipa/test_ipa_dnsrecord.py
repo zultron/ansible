@@ -12,26 +12,10 @@ class TestDNSRecordIPAClient(unittest.TestCase, AbstractTestClass):
 
     test_class = DNSRecordIPAClient
 
-    module_params = dict(
-        zone = "example.com",
-        idnsname = "host1",
-        arecord = [ "192.168.42.38", "192.168.43.38" ],
-        txtrecord = "new text",
-        state = "present",
-        ipa_host = "host1.example.com",
-        ipa_user = "admin",
-        ipa_pass = "secretpass",
-    )
+    # Track state from test to test
+    current_state = {}
 
-    found_obj = {
-        'arecord': ['192.168.42.37', '192.168.43.38'],
-        'dn': 'idnsname=host1,idnsname=example.com.,cn=dns,dc=example,dc=com',
-        'idnsname': ['host1'],
-        'mxrecord': ['10 mx.example.com'],
-        'objectClass': ['top', 'idnsrecord'],
-        'txtrecord': ['old text', 'old text 2']}
-
-    find_params = dict(
+    find_request = dict(
         method='dnsrecord_find',
         name=['example.com'],
         item=dict(all = True,
@@ -39,80 +23,227 @@ class TestDNSRecordIPAClient(unittest.TestCase, AbstractTestClass):
         item_filter=None,
     )
 
-    # This object makes most operations idempotent; reuse it
-    idempotent_obj_updates = {
-        'arecord': ['192.168.42.37', '192.168.43.38', '192.168.42.38'],
-        'txtrecord': ['old text', 'old text 2', 'new text'],
-    }
+    def test_10_dnsrecord_present_new(self):
+        test = 10
+        # Create new object
+        client = self.runner(
+            module_params = dict(
+                zone = "example.com",
+                idnsname = "host1",
+                arecord = [ "192.168.42.38", "192.168.43.38" ],
+                txtrecord = "new text",
+                state = "present",
+                ipa_host = "host1.example.com",
+                ipa_user = "admin",
+                ipa_pass = "secretpass",
+            ),
+            post_json_calls = [
+                dict(
+                    name = 'find new object',
+                    request = self.find_request,
+                    reply = {},
+                ),
+                dict(
+                    name = 'add new object',
+                    request = {
+                        'item': {'addattr': ['arecord=192.168.42.38',
+                                             'arecord=192.168.43.38',
+                                             'txtrecord=new text'],
+                                 'all': True,
+                                 'delattr': [],
+                                 'setattr': []},
+                        'item_filter': None,
+                        'method': 'dnsrecord_add',
+                        'name': ['example.com', {'__dns_name__': 'host1'}]},
+                    reply_updates = {
+                        'arecord': ['192.168.42.38', '192.168.43.38'],
+                        'txtrecord': ['new text']},
+                ),
+                # No enable/disable operation
+            ],
+        )
 
-    present_existing_data = {
-        # Object already exists
-        'found_obj' : found_obj,
-        # Verify dnszone_mod API params
-        'aom_params' : {
-            'item': {'addattr': ['arecord=192.168.42.38',
-                                 'txtrecord=new text'],
-                     'all': True,
-                     'delattr': [],
-                     'setattr': []},
-            'item_filter': None,
-            'method': 'dnsrecord_mod',
-            'name': ['example.com', {'__dns_name__': 'host1'}]},
-        # Idempotency changes
-        'idempotent_obj_updates' : idempotent_obj_updates,
-    }
+        # Persist client between tests
+        self.current_state['client%d' % test] = client
 
-    enabled_existing_data = 'N/A (en/disable unsupported)'
+    def test_11_dnsrecord_existing_present_listattr(self):
+        test = 11
+        client = self.runner(
+            module_params = dict(
+                zone = "example.com",
+                idnsname = "host1",
+                state = "present",                 # Present:
+                arecord = [ "192.168.42.39" ],     # New
+                mxrecord = ['10 mx1.example.com',  # New
+                            '10 mx2.example.com',  # New
+                            '10 mx3.example.com'], # New
+                txtrecord = "new text",            # Same
+                ipa_host = "host1.example.com",
+                ipa_user = "admin",
+                ipa_pass = "secretpass",
+            ),
+            post_json_calls = [
+                dict(
+                    name = 'find existing object',
+                    request = self.find_request,
+                    reply = self.current_state['client%d' % (test-1)].final_obj,
+                ),
+                dict(
+                    name = 'modify existing object',
+                    request = {
+                        'name': ['example.com', {'__dns_name__': 'host1'}],
+                        'item': {'addattr': ['arecord=192.168.42.39',
+                                             'mxrecord=10 mx1.example.com',
+                                             'mxrecord=10 mx2.example.com',
+                                             'mxrecord=10 mx3.example.com' ],
+                                 'all': True, 'delattr': [], 'setattr': []},
+                        'method': 'dnsrecord_mod',
+                        'item_filter': None,
+                    },
+                    reply_updates = {
+                        'arecord': [ "192.168.42.38",
+                                     "192.168.43.38",
+                                     "192.168.42.39" ],
+                        'mxrecord': ['10 mx1.example.com',
+                                     '10 mx2.example.com',
+                                     '10 mx3.example.com' ],
+                    },
+                ),
+                # No enable/disable operation
+            ],
+        )
 
-    present_new_data = {
-        # Object doesn't exist yet
-        'found_obj' : {},
-        # Verify dnsrecord_add API params
-        'aom_params' : {
-            'item': {'addattr': ['arecord=192.168.42.38',
-                                 'arecord=192.168.43.38',
-                                 'txtrecord=new text'],
-                     'all': True,
-                     'delattr': [],
-                     'setattr': []},
-            'item_filter': None,
-            'method': 'dnsrecord_add',
-            'name': ['example.com', {'__dns_name__': 'host1'}]},
-        # Idempotency changes
-        'idempotent_obj_updates' : idempotent_obj_updates,
-    }
+        # Persist client between tests
+        self.current_state['client%d' % test] = client
 
-    disabled_new_data = 'N/A (en/disable unsupported)'
+    def test_12_ca_existing_absent_listattr(self):
+        test = 12
+        client = self.runner(
+            module_params = dict(
+                zone = "example.com",
+                idnsname = "host1",
+                state = "absent",                            # Absent:
+                arecord = [ "192.168.42.38",                 # Remove
+                            "192.168.43.38",                 # Remove
+                            "192.168.42.50" ],               # Noop
+                srvrecord = [ '0 100 88 h01.zultron.com.' ], # Noop
+                mxrecord = ['10 mx2.example.com',            # Remove
+                            '10 mx3.example.com'],           # Remove
+                txtrecord = "new text",                      # Remove
+                ipa_host = "host1.example.com",
+                ipa_user = "admin",
+                ipa_pass = "secretpass",
+            ),
+            post_json_calls = [
+                dict(
+                    name = 'find existing object',
+                    request = self.find_request,
+                    reply = self.current_state['client%d' % (test-1)].final_obj,
+                ),
+                dict(
+                    name = 'delete attributes from existing object',
+                    request = {
+                        'item': {'delattr': ['arecord=192.168.42.38',
+                                             'arecord=192.168.43.38',
+                                             'mxrecord=10 mx2.example.com',
+                                             'mxrecord=10 mx3.example.com',
+                                             'txtrecord=new text' ],
+                                 'addattr': [], 'setattr': [], 'all': True},
+                        'item_filter': None,
+                        'method': 'dnsrecord_mod',
+                        'name': ['example.com', {'__dns_name__': 'host1'}]},
+                    reply_updates = {
+                        'arecord': [ "192.168.42.39" ],
+                        'mxrecord': ['10 mx1.example.com' ],
+                        'txtrecord': None,
+                    },
+                ),
+                # No enable/disable operation
+            ],
+        )
 
-    exact_existing_data = {
-        # Object already exists
-        'found_obj' : found_obj,
-        # Request object state exactly as specified in module params
-        'module_params_updates' : {'state' : 'exact'},
-        # Verify dnsrecord_mod API params
-        'aom_params' : {
-            'item': {'addattr': ['arecord=192.168.42.38',
-                                 'txtrecord=new text'],
-                     'all': True,
-                     'delattr': ['arecord=192.168.42.37',
-                                 'mxrecord=10 mx.example.com',
-                                 'txtrecord=old text',
-                                 'txtrecord=old text 2'],
-                     'setattr': []},
-            'item_filter': None,
-            'method': 'dnsrecord_mod',
-            'name': ['example.com', {'__dns_name__': 'host1'}]},
-        # Idempotency
-        'idempotent_obj' : {
-            'arecord': [ "192.168.42.38", "192.168.43.38" ],
-            'dn': 'idnsname=host1,idnsname=example.com.,cn=dns,dc=example,dc=com',
-            'idnsname': ['host1'],
-            'objectClass': ['top', 'idnsrecord'],
-            'txtrecord' : ['new text']},
-    }
+        # Persist client between tests
+        self.current_state['client%d' % test] = client
 
-    rem_params = {
-        'item': {},
-        'item_filter': None,
-        'method': 'dnsrecord_del',
-        'name': ['example.com', {'__dns_name__': 'host1'}]}
+    def test_13_dnsrecord_existing_exact(self):
+        test = 13
+        client = self.runner(
+            module_params = dict(
+                zone = "example.com",
+                idnsname = "host1",
+                state = "exact",                                 # Exact:
+                arecord = [ "192.168.42.39",                     # Noop
+                            "192.168.42.38" ],                   # Add
+                mxrecord = [# '10 mx1.example.com',              # Remove
+                            '10 mx2.example.com' ],              # Add
+                txtrecord = "newer text",                        # Add
+                ipa_host = "host1.example.com",
+                ipa_user = "admin",
+                ipa_pass = "secretpass",
+            ),
+            post_json_calls = [
+                dict(
+                    name = 'find existing object',
+                    request = self.find_request,
+                    reply = self.current_state['client%d' % (test-1)].final_obj,
+                ),
+                dict(
+                    name = 'exact modify existing object',
+                    request = {
+                        'item': {
+                            'addattr': [
+                                'arecord=192.168.42.38',
+                                'mxrecord=10 mx2.example.com',
+                                'txtrecord=newer text',                            
+                            ],
+                            'delattr': [
+                                'mxrecord=10 mx1.example.com' ],
+                            'setattr': [], 'all': True},
+                        'method': 'dnsrecord_mod',
+                        'item_filter': None,
+                        'name': ['example.com', {'__dns_name__': 'host1'}]},
+                    reply_updates = {
+                        'arecord': [ "192.168.42.39", "192.168.42.38" ],
+                        'mxrecord': [ '10 mx2.example.com' ],
+                        'txtrecord': [ 'newer text' ],
+                    },
+                ),
+                # No enable/disable operation
+            ],
+        )
+
+        # Persist client between tests
+        self.current_state['client%d' % test] = client
+
+    def test_14_dnsrecord_existing_absent_object(self):
+        test = 14
+        client = self.runner(
+            module_params = dict(
+                zone = "example.com",
+                idnsname = "host1",
+                state = "absent",                         # Absent
+                ipa_host = "host1.example.com",
+                ipa_user = "admin",
+                ipa_pass = "secretpass",
+            ),
+            post_json_calls = [
+                dict(
+                    name = 'find existing object',
+                    request = self.find_request,
+                    reply = self.current_state['client%d' % (test-1)].final_obj,
+                ),
+                dict(
+                    name = 'remove existing object',
+                    request = {
+                        'item': {},
+                        'item_filter': None,
+                        'method': 'dnsrecord_del',
+                        'name': ['example.com', {'__dns_name__': 'host1'}]},
+                    reply = {},
+                ),
+                # No enable/disable operation
+            ],
+        )
+
+        # Persist client between tests
+        self.current_state['client%d' % test] = client
