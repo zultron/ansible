@@ -118,8 +118,8 @@ class CAACLIPAClient(IPAClient):
     kw_args = dict(
         # common params
         cn = dict(
-            type='str', required=True, aliases=['name'],
-            when=['find'], when_name=['add', 'mod', 'rem']),
+            type='str', required=True, aliases=['name'], when=['find'],
+            when_name=['add', 'mod', 'rem', 'enabled', 'disabled']),
         # add/mod params
         description = dict(
             type='str', required=False, when=['add', 'mod'],
