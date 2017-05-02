@@ -41,7 +41,7 @@ class TestCAACLIPAClient(unittest.TestCase, AbstractTestClass):
             ),
             post_json_calls = [
                 dict(
-                    name = 'find() (new object)',
+                    name = 'find new object',
                     request = self.find_request,
                     reply = {},
                 ),
