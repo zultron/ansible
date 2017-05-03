@@ -35,6 +35,8 @@ try:
 except ImportError:
     import simplejson as json
 
+import re
+
 from ansible.module_utils._text import to_bytes, to_text
 from ansible.module_utils.pycompat24 import get_exception
 from ansible.module_utils.six import PY3
@@ -127,7 +129,9 @@ class IPAClient(object):
                 when = spec.pop('when', ['add','mod']),
                 when_name = spec.pop('when_name', []),
                 req_key = spec.pop('req_key', None),
-                value_filter = spec.pop('value_filter', None),
+                value_filter_func = spec.pop('value_filter_func', None),
+                value_filter_re = (re.compile(spec.pop('value_filter_re')) \
+                                   if 'value_filter_re' in spec else None),
             )
             for k in spec_orig.get('when_name',[]):
                 name_map = self._name_map.setdefault(k,[None,{}])
@@ -237,10 +241,25 @@ class IPAClient(object):
     def name_map(self, action, i):
         return self._name_map.get(action, [None,{}])[i]
 
+    def apply_value_re(self, key, val):
+        filter_re = self.param_data[key]['value_filter_re']
+        res = []
+        for v in val:
+            m = filter_re.match(val)
+            if m is None:  continue
+            res.append(m.group(1))
+        return res
+
+    def filter_value(self, key, val, dirty, item):
+        # Subclasses may override this; return True when item was processed
+        return False
+
     def clean(self, dirty, action='add', curr=False):
         item = {}
         name = [None, {}]
         for key, val in dirty.items():
+            # Hook for special processing
+            if self.filter_value(key, val, dirty, item):  continue
             if not curr:
                 # Special handling for request 'name' args
                 if key == self.name_map(action,0): # Positional arg
@@ -263,10 +282,10 @@ class IPAClient(object):
                     item['enabled'] = val[0]
                 else:  continue # Skip it
             # Munge current attr values into change-compatible values
-            if curr and self.param_data[key]['value_filter'] is not None:
-                val = map(self.param_data[key]['value_filter'], val)
+            if curr and self.param_data[key]['value_filter_re'] is not None:
+                val = self.apply_value_re(key, val)
             # Ignore empty values
-            if val[0] is None:  continue
+            if val==[] or val[0] is None:  continue
             # Convert 'TRUE' and 'FALSE' to booleans
             if self.param_data[key]['type'] == 'bool' \
                and isinstance(val[0], basestring):
@@ -344,20 +363,24 @@ class IPAClient(object):
             # Move key from add list to set list
             changes['setattr'][key] = changes['addattr'].pop(key)
 
-        self.changes = changes
+        request['item'] = changes
         self.changed = bool(changes['addattr'] or changes['delattr']
                             or changes['setattr'])
         return request
 
-    def expand_changes(self):
+    def expand_changes(self, request):
         expanded_changes = {'addattr':[], 'delattr':[], 'setattr':[],
                             'all':True}
-        for op in self.changes:
-            for attr, val_list in self.changes[op].items():
+        for op in request['item']:
+            for attr, val_list in request['item'][op].items():
                 for val in val_list:
                     expanded_changes[op].append("%s=%s" % (attr, val))
             expanded_changes[op].sort() # Sort for unit tests
-        return expanded_changes
+        request['item'] = expanded_changes
+
+    def request_cleanup(self, request):
+        # Subclasses may override to patch up request before posting
+        pass
 
     def add_or_mod(self):
 
@@ -368,7 +391,9 @@ class IPAClient(object):
             self.updated_obj = self.found_obj
             return
         
-        request['item'] = self.expand_changes()
+        # Do any last-minute request patching
+        self.request_cleanup(request)
+        self.expand_changes(request)
 
         self.final_obj = self.updated_obj = self._post_json(**request)
 
@@ -415,8 +440,9 @@ class IPAClient(object):
                 # Object is already absent; do nothing
                 return False, {}
 
-            request = self.clean(self.module.params, 'rem')
-            if not request['item']:
+            # If no parameters in request, then 'absent' means to
+            # remove the entire object here
+            if not self.clean(self.module.params, 'mod')['item']:
                 # No keys in request:  remove whole object
                 self.rem()
                 return True, {}
@@ -430,13 +456,6 @@ class IPAClient(object):
 
     def main(self):
 
-        # self.login()
-        # changed, obj = self.ensure()
-        # result = {
-        #     'changed': changed,
-        #     self.name: obj,
-        # }
-        # self.module.exit_json(**result)
         try:
             self.login()
             changed, obj = self.ensure()

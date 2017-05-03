@@ -272,9 +272,9 @@ class AbstractTestClass(object):
             side_effect = deepcopy(reply_list))
 
         #
-        # Run main()
+        # Run ensure()
         #
-        client1.main()
+        client1.ensure()
 
         #
         # Verify run
