@@ -258,8 +258,6 @@ class IPAClient(object):
         item = {}
         name = [None, {}]
         for key, val in dirty.items():
-            # Hook for special processing
-            if self.filter_value(key, val, dirty, item):  continue
             if not curr:
                 # Special handling for request 'name' args
                 if key == self.name_map(action,0): # Positional arg
@@ -270,12 +268,14 @@ class IPAClient(object):
                     continue
             # Translate attr keys from current to change object
             if curr:  key = self.param_key_map.get(key, key)
+            # All attributes in lists in find results, even scalars
+            if action != 'find' and not isinstance(val, list):  val = [val]
+            # Hook for special processing
+            if self.filter_value(key, val, dirty, item):  continue
             # Ignore params not central to object definition ('dn', 'ipa_host')
             if key not in self.param_data:  continue
             # Ignore params irrelevant to this action
             if action not in self.param_data[key]['when']:  continue
-            # All attributes in lists in find results, even scalars
-            if action != 'find' and not isinstance(val, list):  val = [val]
             # Handle enable flag attr
             if key == self.enablekey:
                 if action in ('enable','disable'):
