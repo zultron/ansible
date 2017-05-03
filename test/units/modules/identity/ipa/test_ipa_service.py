@@ -155,9 +155,7 @@ class TestServiceIPAClient(unittest.TestCase, AbstractTestClass):
             module_params = dict(
                 krbcanonicalname = "test/host1.example.com@EXAMPLE.COM",
                 state = "absent",                  # Absent:   start: 3145728
-                ipakrbrequirespreauth = False,     # krbticketflags: Noop
                 ipakrbokasdelegate = True,         # krbticketflags: -1048576
-                ipakrboktoauthasdelegate = False,  # krbticketflags: Noop
                 ipa_host = "host1.example.com",
                 ipa_user = "admin",
                 ipa_pass = "secretpass",
@@ -177,7 +175,7 @@ class TestServiceIPAClient(unittest.TestCase, AbstractTestClass):
                         'method': 'service_mod',
                         'name': [ 'test/host1.example.com@EXAMPLE.COM' ]
                     },
-                    reply_updates = { 'krbticketflags': 2097152 },
+                    reply_updates = { 'krbticketflags': [ 2097152 ] },
                 ),
                 # No enable/disable operation
             ],
@@ -187,7 +185,7 @@ class TestServiceIPAClient(unittest.TestCase, AbstractTestClass):
         self.current_state['client%d' % test] = client
 
     def test_14_service_existing_exact_krbticketflags(self):
-        test = 13
+        test = 14
         client = self.runner(
             module_params = dict(
                 krbcanonicalname = "test/host1.example.com@EXAMPLE.COM",
@@ -225,7 +223,7 @@ class TestServiceIPAClient(unittest.TestCase, AbstractTestClass):
         self.current_state['client%d' % test] = client
 
     def test_15_service_existing_set_managedby(self):
-        test = 13
+        test = 15
         client = self.runner(
             module_params = dict(
                 krbcanonicalname = "test/host1.example.com@EXAMPLE.COM",

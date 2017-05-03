@@ -217,12 +217,9 @@ class ServiceIPAClient(IPAClient):
 
         # These are broken out of the krbticketflags param of the reply
         if key == 'krbticketflags':
-            item['ipakrbrequirespreauth'] = (
-                [bool(dirty.get('krbticketflags',[0])[0]&128)])
-            item['ipakrbokasdelegate'] = (
-                [bool(dirty.get('krbticketflags',[0])[0]&1048576)])
-            item['ipakrboktoauthasdelegate'] = (
-                [bool(dirty.get('krbticketflags',[0])[0]&2097152)])
+            item['ipakrbrequirespreauth']    = ( [bool( val[0] & 128     )] )
+            item['ipakrbokasdelegate']       = ( [bool( val[0] & 1048576 )] )
+            item['ipakrboktoauthasdelegate'] = ( [bool( val[0] & 2097152 )] )
             return True
 
 
@@ -245,7 +242,10 @@ class ServiceIPAClient(IPAClient):
                     if not val: complement = not is_del
                     else: complement = is_del
                     if is_del and not val:
-                        pass # Del a false value?
+                        # Absent 'ipakrb*: False' doesn't make sense,
+                        # since the bit is still there; call this an
+                        # error
+                        self._fail(key, 'Unable to make False value absent')
                     elif complement:
                         krbticketflags &= ~(mult)
                     else:
