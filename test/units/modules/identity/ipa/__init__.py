@@ -36,6 +36,9 @@ class AbstractTestClass(object):
         # Set up module params for test
         mod.params = module_params.copy() or self.module_params.copy()
         mod.params.update(module_params_updates)
+        # Set up fail_json() method
+        def raise_exception(msg):  raise RuntimeError(msg)
+        mod.fail_json = MagicMock(side_effect=raise_exception)
 
         # Create instance
         client = self.test_class()
@@ -320,9 +323,9 @@ class AbstractTestClass(object):
             side_effect = [found_obj])
 
         #
-        # Run main()
+        # Run ensure()
         #
-        client2.main()
+        client2.ensure()
 
         #
         # Run and verify add_or_mod()
