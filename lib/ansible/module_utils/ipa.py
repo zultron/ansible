@@ -62,13 +62,13 @@ class IPAClient(object):
     # Map method names in base object:  may be overridden
     # - Pattern will be filled with class `name` attribute
     methods = dict(
-        add = '%s_add',
-        rem = '%s_del',
-        mod = '%s_mod',
-        find = '%s_find',
-        show = '%s_show',
-        enabled = '%s_enable',
-        disabled = '%s_disable',
+        add = '{}_add',
+        rem = '{}_del',
+        mod = '{}_mod',
+        find = '{}_find',
+        show = '{}_show',
+        enabled = '{}_enable',
+        disabled = '{}_disable',
         )
 
     # Keyword args:  must be overridden
@@ -90,7 +90,7 @@ class IPAClient(object):
 
     def init_methods(self):
         self._methods = dict(map(
-            lambda x: (x[0],x[1]%self.name),
+            lambda x: (x[0],x[1].format(self.name)),
             self.__class__.methods.items()))
 
     def init_standard_params(self):
@@ -231,9 +231,10 @@ class IPAClient(object):
             result = resp.get('result')
             if 'result' in result:
                 result = result.get('result')
-                if isinstance(result, list):
-                    if item_filter is not None:
-                        result = [ i for i in result if item_filter(i) ]
+                if isinstance(result, list) and \
+                   method == self.methods['find'] and \
+                   self.find_filter is not None:
+                    result = [ i for i in result if self.find_filter(i) ]
                     return (result[-1] if len(result) > 0 else {})
             return result
         return None
@@ -271,8 +272,7 @@ class IPAClient(object):
             # All attributes in lists in find results, even scalars
             if action != 'find' and not isinstance(val, list):  val = [val]
             # Hook for special processing
-            if action != 'find' and self.filter_value(key, val, dirty, item):
-                continue
+            if self.filter_value(key, val, dirty, item, action):  continue
             # Ignore params not central to object definition ('dn', 'ipa_host')
             if key not in self.param_data:  continue
             # Ignore params irrelevant to this action
@@ -304,7 +304,6 @@ class IPAClient(object):
             item=item,
             name=name,
             method=self._methods[action],
-            item_filter = self.find_filter if action=='find' else None,
         )
 
     def find(self):

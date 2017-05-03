@@ -19,7 +19,6 @@ class TestDNSZoneIPAClient(unittest.TestCase, AbstractTestClass):
         name=[None],
         item=dict(all = True,
                   idnsname = 'test.example.com' ),
-        item_filter=None,
     )
 
     def test_10_dnszone_enabled_new(self):
@@ -48,7 +47,6 @@ class TestDNSZoneIPAClient(unittest.TestCase, AbstractTestClass):
                                               'idnsallowtransfer=none;',
                                               'nsrecord=host2.example.com.'],
                                   'delattr': [], 'addattr': [], 'all': True},
-                        'item_filter': None,
                         'method' : 'dnszone_add',
                         'name' : ['test.example.com']},
                     reply_updates = {
@@ -60,7 +58,6 @@ class TestDNSZoneIPAClient(unittest.TestCase, AbstractTestClass):
                     name = 'enable new object',
                     request = {
                         'item' : {},
-                        'item_filter': None,
                         'method' : 'dnszone_enable',
                         'name' : ['test.example.com']},
                     reply_updates = { 'idnszoneactive': ['TRUE'] },
@@ -90,7 +87,6 @@ class TestDNSZoneIPAClient(unittest.TestCase, AbstractTestClass):
                     request = {
                         'item' : {'setattr': ['idnsallowdynupdate=False' ],
                                   'addattr': [], 'delattr': [], 'all': True},
-                        'item_filter': None,
                         'method' : 'dnszone_mod',
                         'name' : ['test.example.com']},
                     reply_updates = {
@@ -120,7 +116,6 @@ class TestDNSZoneIPAClient(unittest.TestCase, AbstractTestClass):
                     name = 'disable existing object',
                     request = {
                         'item' : {},
-                        'item_filter': None,
                         'method' : 'dnszone_disable',
                         'name' : ['test.example.com']},
                     reply_updates = { 'idnszoneactive': ['FALSE'] },
@@ -148,8 +143,7 @@ class TestDNSZoneIPAClient(unittest.TestCase, AbstractTestClass):
                     request = {
                         'item' : {},
                         'method' : 'dnszone_del',
-                        'name' : ['test.example.com'],
-                        'item_filter' : None},
+                        'name' : ['test.example.com']},
                     reply = {},
                 ),
             ],

@@ -113,11 +113,11 @@ class DNSRecordIPAClient(IPAClient):
     name = 'dnsrecord'
 
     methods = dict(
-        add = '%s_add',
-        rem = '%s_del',
-        mod = '%s_mod',
-        find = '%s_find',
-        show = '%s_show',
+        add = '{}_add',
+        rem = '{}_del',
+        mod = '{}_mod',
+        find = '{}_find',
+        show = '{}_show',
         )
 
     kw_args = dict(

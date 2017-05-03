@@ -19,7 +19,6 @@ class TestDNSRecordIPAClient(unittest.TestCase, AbstractTestClass):
         name=['example.com'],
         item=dict(all = True,
                   idnsname = {'__dns_name__':'host1'} ),
-        item_filter=None,
     )
 
     def test_10_dnsrecord_present_new(self):
@@ -50,7 +49,6 @@ class TestDNSRecordIPAClient(unittest.TestCase, AbstractTestClass):
                                  'all': True,
                                  'delattr': [],
                                  'setattr': []},
-                        'item_filter': None,
                         'method': 'dnsrecord_add',
                         'name': ['example.com', {'__dns_name__': 'host1'}]},
                     reply_updates = {
@@ -92,7 +90,6 @@ class TestDNSRecordIPAClient(unittest.TestCase, AbstractTestClass):
                                              'mxrecord=10 mx3.example.com' ],
                                  'all': True, 'delattr': [], 'setattr': []},
                         'method': 'dnsrecord_mod',
-                        'item_filter': None,
                     },
                     reply_updates = {
                         'arecord': [ "192.168.42.38",
@@ -139,7 +136,6 @@ class TestDNSRecordIPAClient(unittest.TestCase, AbstractTestClass):
                                              'mxrecord=10 mx3.example.com',
                                              'txtrecord=new text' ],
                                  'addattr': [], 'setattr': [], 'all': True},
-                        'item_filter': None,
                         'method': 'dnsrecord_mod',
                         'name': ['example.com', {'__dns_name__': 'host1'}]},
                     reply_updates = {
@@ -186,7 +182,6 @@ class TestDNSRecordIPAClient(unittest.TestCase, AbstractTestClass):
                                 'mxrecord=10 mx1.example.com' ],
                             'setattr': [], 'all': True},
                         'method': 'dnsrecord_mod',
-                        'item_filter': None,
                         'name': ['example.com', {'__dns_name__': 'host1'}]},
                     reply_updates = {
                         'arecord': [ "192.168.42.39", "192.168.42.38" ],
@@ -218,7 +213,6 @@ class TestDNSRecordIPAClient(unittest.TestCase, AbstractTestClass):
                     name = 'remove existing object',
                     request = {
                         'item': {},
-                        'item_filter': None,
                         'method': 'dnsrecord_del',
                         'name': ['example.com', {'__dns_name__': 'host1'}]},
                     reply = {},

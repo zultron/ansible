@@ -18,7 +18,6 @@ class TestCAIPAClient(unittest.TestCase, AbstractTestClass):
         'item': {'all': True, 'cn': 'Test CA'},
         'method': 'ca_find',
         'name': [None],
-        'item_filter': None,
     }
 
     def test_10_ca_present_new(self):
@@ -54,7 +53,6 @@ class TestCAIPAClient(unittest.TestCase, AbstractTestClass):
                                   'addattr': [],
                                   'delattr': []},
                         'method' : 'ca_add',
-                        'item_filter': None,
                     },
                     reply_updates = {
                         "description": [ "For testing Ansible" ]},
@@ -89,7 +87,6 @@ class TestCAIPAClient(unittest.TestCase, AbstractTestClass):
                                   'addattr': [],
                                   'delattr': ['description=For testing Ansible']},
                         'method' : 'ca_mod',
-                        'item_filter': None,
                     },
                     # recycle reply; not needed
                     reply_updates = {
@@ -124,7 +121,6 @@ class TestCAIPAClient(unittest.TestCase, AbstractTestClass):
                                   'addattr': [],
                                   'delattr': []},
                         'method' : 'ca_mod',
-                        'item_filter': None,
                     },
                     reply_updates = {
                         "description": [ "Some Ansible test artifact" ]},
@@ -154,7 +150,6 @@ class TestCAIPAClient(unittest.TestCase, AbstractTestClass):
                         'name' : [ "Test CA" ],
                         'item' : {},
                         "method": "ca_del",
-                        'item_filter' : None,
                     },
                     reply = {},
                 ),

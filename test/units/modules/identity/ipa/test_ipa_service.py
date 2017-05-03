@@ -19,7 +19,6 @@ class TestServiceIPAClient(unittest.TestCase, AbstractTestClass):
         name=[None],
         item=dict(all = True,
                   krbcanonicalname = 'test/host1.example.com@EXAMPLE.COM' ),
-        item_filter=None,
     )
 
     cert = ("MIICjDCCAfWgAwIBAgIJALTKa/IEGbmsMA0GCSqGSIb3DQEBCwUAMF8xCzAJ"
@@ -63,7 +62,6 @@ class TestServiceIPAClient(unittest.TestCase, AbstractTestClass):
                     request = {
                         'item': {'setattr': [ 'certificate=%s' % self.cert ],
                                  'addattr': [], 'delattr': [], 'all': True},
-                        'item_filter': None,
                         'method': 'service_add',
                         'name': [ 'test/host1.example.com@EXAMPLE.COM' ] },
                     reply_updates = {
@@ -94,7 +92,6 @@ class TestServiceIPAClient(unittest.TestCase, AbstractTestClass):
                     request = {
                         'item': {'setattr': [ 'krbticketflags=128' ],
                                  'addattr': [], 'delattr': [], 'all': True},
-                        'item_filter': None,
                         'method': 'service_mod',
                         'name': [ 'test/host1.example.com@EXAMPLE.COM' ]
                     },
@@ -127,7 +124,6 @@ class TestServiceIPAClient(unittest.TestCase, AbstractTestClass):
                     request = {
                         'item': {'setattr': [ 'krbticketflags=3145728' ],
                                  'addattr': [], 'delattr': [], 'all': True},
-                        'item_filter': None,
                         'method': 'service_mod',
                         'name': [ 'test/host1.example.com@EXAMPLE.COM' ]
                     },
@@ -158,7 +154,6 @@ class TestServiceIPAClient(unittest.TestCase, AbstractTestClass):
                     request = {
                         'item': {'setattr': [ 'krbticketflags=%d' % 2097152 ],
                                  'addattr': [], 'delattr': [], 'all': True},
-                        'item_filter': None,
                         'method': 'service_mod',
                         'name': [ 'test/host1.example.com@EXAMPLE.COM' ]
                     },
@@ -192,7 +187,6 @@ class TestServiceIPAClient(unittest.TestCase, AbstractTestClass):
                     request = {
                         'item': {'setattr': [ 'krbticketflags=128' ],
                                  'addattr': [], 'delattr': [], 'all': True},
-                        'item_filter': None,
                         'method': 'service_mod',
                         'name': [ 'test/host1.example.com@EXAMPLE.COM' ]
                     },
@@ -227,7 +221,6 @@ class TestServiceIPAClient(unittest.TestCase, AbstractTestClass):
                                 'managedby=fqdn=host1.example.com,cn=computers,'
                                 'cn=accounts,dc=example,dc=com') ],
                             'setattr': [], 'delattr': [], 'all': True},
-                        'item_filter': None,
                         'method': 'service_mod',
                         'name': [ 'test/host1.example.com@EXAMPLE.COM' ]
                     },
@@ -286,7 +279,6 @@ class TestServiceIPAClient(unittest.TestCase, AbstractTestClass):
                                  'cn=accounts,dc=example,dc=com'),
                             ],
                             'setattr': [], 'delattr': [], 'all': True},
-                        'item_filter': None,
                         'method': 'service_mod',
                         'name': [ 'test/host1.example.com@EXAMPLE.COM' ]
                     },
@@ -346,7 +338,6 @@ class TestServiceIPAClient(unittest.TestCase, AbstractTestClass):
                                  'cn=accounts,dc=example,dc=com'),
                             ],
                             'setattr': [], 'all': True},
-                        'item_filter': None,
                         'method': 'service_mod',
                         'name': [ 'test/host1.example.com@EXAMPLE.COM' ]
                     },
@@ -426,7 +417,6 @@ class TestServiceIPAClient(unittest.TestCase, AbstractTestClass):
                                  'cn=accounts,dc=example,dc=com'),
                             ],
                             'all': True},
-                        'item_filter': None,
                         'method': 'service_mod',
                         'name': [ 'test/host1.example.com@EXAMPLE.COM' ]
                     },
@@ -471,7 +461,6 @@ class TestServiceIPAClient(unittest.TestCase, AbstractTestClass):
                     name = 'modify existing object',
                     request = {
                         'item': {},
-                        'item_filter': None,
                         'method': 'service_del',
                         'name': [ 'test/host1.example.com@EXAMPLE.COM' ]
                     },

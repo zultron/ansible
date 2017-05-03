@@ -19,7 +19,6 @@ class TestCAACLIPAClient(unittest.TestCase, AbstractTestClass):
         name=[None],
         item=dict(all = True,
                   cn = 'Test ACL' ),
-        item_filter=None,
     )
 
     def test_10_ca_present_new(self):
@@ -54,7 +53,6 @@ class TestCAACLIPAClient(unittest.TestCase, AbstractTestClass):
                                  'all': True,
                                  'delattr': [],
                                  'setattr': ['description=ACL for Ansible testing']},
-                        'item_filter': None,
                         'method': 'caacl_add',
                         'name': ['Test ACL']},
                     reply_updates = {
@@ -94,7 +92,6 @@ class TestCAACLIPAClient(unittest.TestCase, AbstractTestClass):
                                  'all': True,
                                  'delattr': [],
                                  'setattr': []},
-                        'item_filter': None,
                         'method': 'caacl_mod',
                         'name': ['Test ACL']},
                     reply_updates = {
@@ -132,7 +129,6 @@ class TestCAACLIPAClient(unittest.TestCase, AbstractTestClass):
                                  'delattr': ['group=group1',
                                              'user=user3'],
                                  'setattr': []},
-                        'item_filter': None,
                         'method': 'caacl_mod',
                         'name': ['Test ACL']},
                     reply_updates = {
@@ -172,7 +168,6 @@ class TestCAACLIPAClient(unittest.TestCase, AbstractTestClass):
                                  'delattr': [], 'all': True,
                              },
                         'method': 'caacl_mod',
-                        'item_filter': None,
                     },
                     reply_updates = {
                         'description' : ["New description"],
@@ -186,7 +181,7 @@ class TestCAACLIPAClient(unittest.TestCase, AbstractTestClass):
                     request = {
                         'name': ['Test ACL'],
                         'method': 'caacl_disable',
-                        'item': {}, 'item_filter': None,
+                        'item': {},
                     },
                     reply_updates = {
                         "ipaenabledflag": [ "FALSE" ], 
@@ -225,7 +220,6 @@ class TestCAACLIPAClient(unittest.TestCase, AbstractTestClass):
                                              'host=host1.example.com'],
                                  'setattr': [], 'all': True},
                         'method': 'caacl_mod',
-                        'item_filter': None,
                     },
                     reply_updates = {
                         'host' : ['host2.example.com',
@@ -258,7 +252,7 @@ class TestCAACLIPAClient(unittest.TestCase, AbstractTestClass):
                     request = {
                         'name': ['Test ACL'],
                         'method': 'caacl_enable',
-                        'item': {}, 'item_filter': None,
+                        'item': {},
                     },
                     reply_updates = {
                         "ipaenabledflag": [ "TRUE" ], 
@@ -286,7 +280,6 @@ class TestCAACLIPAClient(unittest.TestCase, AbstractTestClass):
                     name = 'remove existing object',
                     request = {
                         'item': {},
-                        'item_filter': None,
                         'method': 'caacl_del',
                         'name': ['Test ACL']},
                     reply = {},
