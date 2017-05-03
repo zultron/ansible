@@ -185,7 +185,7 @@ class ServiceIPAClient(IPAClient):
             item[key].remove(self.module.params.get('krbcanonicalname'))
             return True
 
-        if key.startswith('write_keytab') or key.startswith('read_keytab'):
+        if key.startswith('ipaallowedtoperform;'):
             # Filter account DNs of the right type and return the uid/cn/fqdn
             #
             # uid=admin,cn=users,cn=accounts,dc=example,dc=com
@@ -193,17 +193,15 @@ class ServiceIPAClient(IPAClient):
             # fqdn=host1.example.com,cn=computers,cn=accounts,dc=example,dc=com
             # cn=ipaservers,cn=hostgroups,cn=accounts,dc=example,dc=com
 
-            # Account type:  2nd element of DN
-            acct_type = key.split('_')[2]
-            if acct_type == 'hosts':  acct_type = 'computers'
-            # For DNs matching the account type, extract the 1st element
-            item[key] = []
+            op = re.match(r'ipaallowedtoperform;(.*)_keys', key).group(1)
             for v in val:
                 m = re.match(
-                    r'^(?:fqdn|cn|uid)=([^,]*),cn=%s,cn=accounts,' % acct_type,
-                    v)
+                    r'^(?:fqdn|cn|uid)=([^,]*),cn=([^,]*),cn=accounts,', v)
                 if m is not None:
-                    item[key].append(m.group(1))
+                    name, acct_type = m.groups()
+                    if acct_type == 'computers':  acct_type = 'hosts'
+                    item.setdefault(
+                        '%s_keytab_%s' % (op, acct_type), []).append(name)
             return True
 
         if key == 'managedby':
@@ -217,9 +215,16 @@ class ServiceIPAClient(IPAClient):
 
         # These are broken out of the krbticketflags param of the reply
         if key == 'krbticketflags':
-            item['ipakrbrequirespreauth']    = ( [bool( val[0] & 128     )] )
-            item['ipakrbokasdelegate']       = ( [bool( val[0] & 1048576 )] )
-            item['ipakrboktoauthasdelegate'] = ( [bool( val[0] & 2097152 )] )
+            for new_key, bit in (('ipakrbrequirespreauth', 128),
+                                 ('ipakrbokasdelegate', 1048576),
+                                 ('ipakrboktoauthasdelegate', 2097152)):
+                new_v = bool( val[0] & bit )
+                if new_v is False and \
+                   self.module.params['state'] in ('absent', 'exact'):
+                    # ipakrb* : False doesn't make sense in 'absent'
+                    # and superfluous in 'exact'
+                    continue
+                item[new_key] = [new_v]
             return True
 
 
@@ -241,26 +246,31 @@ class ServiceIPAClient(IPAClient):
                     val = req_op.pop(key)[0]
                     if not val: complement = not is_del
                     else: complement = is_del
-                    if is_del and not val:
-                        # Absent 'ipakrb*: False' doesn't make sense,
-                        # since the bit is still there; call this an
-                        # error
-                        self._fail(key, 'Unable to make False value absent')
+                    if is_del and val is False:
+                        # Deleting 'ipakrb*: False' doesn't make
+                        # sense, since the bit is still there
+                        if self.module.params['state'] == 'absent' and not val:
+                            # state = absent:  call this an error
+                            self._fail(key, 'False value when state=absent')
+                        else:
+                            pass # otherwise just ignore
                     elif complement:
                         krbticketflags &= ~(mult)
                     else:
                         krbticketflags |= (mult)
                     have_krbticketflags = True
-        if have_krbticketflags:
+        if have_krbticketflags and krbticketflags != ktf_old:
             request['item']['setattr']['krbticketflags'] = [krbticketflags]
             request['item']['delattr'].pop('krbticketflags',None)
 
-        # ipaAllowedToPerform;write_keys:
+        # ipaAllowedToPerform;(read|write)_keys:
         directory_base_dn = self.module.params.get('directory_base_dn',None)
-        dn_pat = 'uid=%s,cn=%s,cn=accounts,%s'
+        dn_pat = '%s=%s,cn=%s,cn=accounts,%s'
+        type_map = dict(users='uid', groups='cn', hosts='fqdn', hostgroups='cn')
         for thing in ('users', 'groups', 'hosts', 'hostgroups'):
             for perm in ('read', 'write'):
                 key = '%s_keytab_%s' % (perm, thing)
+                thing_trans = 'computers' if thing == 'hosts' else thing
                 for req_op in (request['item']['addattr'],
                                request['item']['delattr']):
                     if key not in req_op: continue
@@ -271,7 +281,8 @@ class ServiceIPAClient(IPAClient):
                     dest_key = 'ipaallowedtoperform;%s_keys'%perm
                     for val in req_op.pop(key):
                         req_op.setdefault(dest_key,[]).append(
-                            dn_pat % (val, thing, directory_base_dn))
+                            dn_pat % (type_map[thing], val, thing_trans,
+                                      directory_base_dn))
 
         # host -> managedby:
         for act_key, acts in request['item'].items():

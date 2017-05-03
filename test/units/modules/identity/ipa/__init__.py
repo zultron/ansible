@@ -309,6 +309,7 @@ class AbstractTestClass(object):
         ###################################
         # Idempotency
         #
+        print "*** Idempotency:"
 
         #
         # Set up 2nd patched test object
@@ -332,7 +333,6 @@ class AbstractTestClass(object):
         #
 
         # Verify ONLY the find call happened (or print debug info & fail)
-        print "*** Idempotency:"
         print "--- Current result:"
         pprint(client2.final_obj)
         if client2._post_json.call_count != 1:

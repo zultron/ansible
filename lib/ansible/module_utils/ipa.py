@@ -271,7 +271,8 @@ class IPAClient(object):
             # All attributes in lists in find results, even scalars
             if action != 'find' and not isinstance(val, list):  val = [val]
             # Hook for special processing
-            if self.filter_value(key, val, dirty, item):  continue
+            if action != 'find' and self.filter_value(key, val, dirty, item):
+                continue
             # Ignore params not central to object definition ('dn', 'ipa_host')
             if key not in self.param_data:  continue
             # Ignore params irrelevant to this action
@@ -364,6 +365,10 @@ class IPAClient(object):
             changes['setattr'][key] = changes['addattr'].pop(key)
 
         request['item'] = changes
+
+        # Do any last-minute request patching
+        self.request_cleanup(request)
+
         self.changed = bool(changes['addattr'] or changes['delattr']
                             or changes['setattr'])
         return request
@@ -391,8 +396,6 @@ class IPAClient(object):
             self.updated_obj = self.found_obj
             return
         
-        # Do any last-minute request patching
-        self.request_cleanup(request)
         self.expand_changes(request)
 
         self.final_obj = self.updated_obj = self._post_json(**request)
