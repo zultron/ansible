@@ -363,22 +363,31 @@ class AbstractTestClass(object):
         #
         # Run ensure()
         #
-        client2.ensure()
+        try:
+            client2.ensure()
+            raised_exception = False
+        except:
+            # Defer raising exception until after printing debug info
+            raised_exception = True
 
         #
         # Run and verify add_or_mod()
         #
 
         # Verify ONLY the find call happened (or print debug info & fail)
-        print "--- Current result:"
+        for request, call in \
+            zip(client2._post_json.call_args_list, post_json_calls):
+            print "--- Sent request:"
+            pprint(request[1])
+            print "--- Expected request:"
+            pprint(call['request'])
+        print "--- Got result:"
         pprint(client2.final_obj)
-        if client2._post_json.call_count != 1:
-            for request, call in \
-                zip(client2._post_json.call_args_list, post_json_calls):
-                print "--- Sent request:"
-                pprint(request[1])
-                print "--- Expected request:"
-                pprint(call['request'])
+
+        # Raise any earlier exception
+        if raised_exception:  raise
+
+        if raised_exception or client2._post_json.call_count != 1:
             print "\n*** Idempotency error"
         self.assertEqual(client2._post_json.call_count, 1)
         print "\n*** SUCCESS"
