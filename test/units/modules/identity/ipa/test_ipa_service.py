@@ -42,9 +42,8 @@ class TestServiceIPAClient(unittest.TestCase, AbstractTestClass):
     maxDiff = 3000
 
     def test_10_service_present_new(self):
-        test = 10
-        # Create new object
-        client = self.runner(
+        self.runner(
+            test_key = 10,
             module_params = dict(
                 krbcanonicalname = "test/host1.example.com@EXAMPLE.COM",
                 certificate = self.cert,
@@ -74,12 +73,9 @@ class TestServiceIPAClient(unittest.TestCase, AbstractTestClass):
             ],
         )
 
-        # Persist client between tests
-        self.current_state['client%d' % test] = client
-
     def test_11_service_existing_present_krbticket_flags_1(self):
-        test = 11
-        client = self.runner(
+        self.runner(
+            test_key = 11,
             module_params = dict(
                 krbcanonicalname = "test/host1.example.com@EXAMPLE.COM",
                 state = "present",                 # Present:
@@ -92,7 +88,6 @@ class TestServiceIPAClient(unittest.TestCase, AbstractTestClass):
                 dict(
                     name = 'find existing object',
                     request = self.find_request,
-                    reply = self.current_state['client%d' % (test-1)].final_obj,
                 ),
                 dict(
                     name = 'modify existing object',
@@ -109,12 +104,9 @@ class TestServiceIPAClient(unittest.TestCase, AbstractTestClass):
             ],
         )
 
-        # Persist client between tests
-        self.current_state['client%d' % test] = client
-
     def test_12_service_existing_present_krbticketflags_2(self):
-        test = 12
-        client = self.runner(
+        self.runner(
+            test_key = 12,
             module_params = dict(
                 krbcanonicalname = "test/host1.example.com@EXAMPLE.COM",
                 state = "present",                 # Present:   start: 128
@@ -129,7 +121,6 @@ class TestServiceIPAClient(unittest.TestCase, AbstractTestClass):
                 dict(
                     name = 'find existing object',
                     request = self.find_request,
-                    reply = self.current_state['client%d' % (test-1)].final_obj,
                 ),
                 dict(
                     name = 'modify existing object',
@@ -146,12 +137,9 @@ class TestServiceIPAClient(unittest.TestCase, AbstractTestClass):
             ],
         )
 
-        # Persist client between tests
-        self.current_state['client%d' % test] = client
-
     def test_13_service_existing_absent_krbticketflags(self):
-        test = 13
-        client = self.runner(
+        self.runner(
+            test_key = 13,
             module_params = dict(
                 krbcanonicalname = "test/host1.example.com@EXAMPLE.COM",
                 state = "absent",                  # Absent:   start: 3145728
@@ -164,7 +152,6 @@ class TestServiceIPAClient(unittest.TestCase, AbstractTestClass):
                 dict(
                     name = 'find existing object',
                     request = self.find_request,
-                    reply = self.current_state['client%d' % (test-1)].final_obj,
                 ),
                 dict(
                     name = 'modify existing object',
@@ -181,12 +168,9 @@ class TestServiceIPAClient(unittest.TestCase, AbstractTestClass):
             ],
         )
 
-        # Persist client between tests
-        self.current_state['client%d' % test] = client
-
     def test_14_service_existing_exact_krbticketflags(self):
-        test = 14
-        client = self.runner(
+        self.runner(
+            test_key = 14,
             module_params = dict(
                 krbcanonicalname = "test/host1.example.com@EXAMPLE.COM",
                 state = "exact",                   # Exact:  start 2097152
@@ -202,7 +186,6 @@ class TestServiceIPAClient(unittest.TestCase, AbstractTestClass):
                 dict(
                     name = 'find existing object',
                     request = self.find_request,
-                    reply = self.current_state['client%d' % (test-1)].final_obj,
                 ),
                 dict(
                     name = 'modify existing object',
@@ -219,12 +202,9 @@ class TestServiceIPAClient(unittest.TestCase, AbstractTestClass):
             ],
         )
 
-        # Persist client between tests
-        self.current_state['client%d' % test] = client
-
     def test_15_service_existing_set_managedby(self):
-        test = 15
-        client = self.runner(
+        self.runner(
+            test_key = 15,
             module_params = dict(
                 krbcanonicalname = "test/host1.example.com@EXAMPLE.COM",
                 state = "present",                 # Present:
@@ -238,7 +218,6 @@ class TestServiceIPAClient(unittest.TestCase, AbstractTestClass):
                 dict(
                     name = 'find existing object',
                     request = self.find_request,
-                    reply = self.current_state['client%d' % (test-1)].final_obj,
                 ),
                 dict(
                     name = 'modify existing object',
@@ -260,12 +239,9 @@ class TestServiceIPAClient(unittest.TestCase, AbstractTestClass):
             ],
         )
 
-        # Persist client between tests
-        self.current_state['client%d' % test] = client
-
     def test_16_service_existing_present_read_write_keytab(self):
-        test = 16
-        client = self.runner(
+        self.runner(
+            test_key = 16,
             module_params = dict(
                 krbcanonicalname = "test/host1.example.com@EXAMPLE.COM",
                 state = "present",                           # Present:
@@ -284,7 +260,6 @@ class TestServiceIPAClient(unittest.TestCase, AbstractTestClass):
                 dict(
                     name = 'find existing object',
                     request = self.find_request,
-                    reply = self.current_state['client%d' % (test-1)].final_obj,
                 ),
                 dict(
                     name = 'modify existing object',
@@ -336,12 +311,9 @@ class TestServiceIPAClient(unittest.TestCase, AbstractTestClass):
             ],
         )
 
-        # Persist client between tests
-        self.current_state['client%d' % test] = client
-
     def test_17_service_existing_absent_read_write_keytab(self):
-        test = 17
-        client = self.runner(
+        self.runner(
+            test_key = 17,
             module_params = dict(
                 krbcanonicalname = "test/host1.example.com@EXAMPLE.COM",
                 state = "absent",                            # Absent:
@@ -357,7 +329,6 @@ class TestServiceIPAClient(unittest.TestCase, AbstractTestClass):
                 dict(
                     name = 'find existing object',
                     request = self.find_request,
-                    reply = self.current_state['client%d' % (test-1)].final_obj,
                 ),
                 dict(
                     name = 'modify existing object',
@@ -396,12 +367,9 @@ class TestServiceIPAClient(unittest.TestCase, AbstractTestClass):
             ],
         )
 
-        # Persist client between tests
-        self.current_state['client%d' % test] = client
-
     def test_18_service_existing_exact_read_write_keytab(self):
-        test = 18
-        client = self.runner(
+        self.runner(
+            test_key = 18,
             module_params = dict(
                 krbcanonicalname = "test/host1.example.com@EXAMPLE.COM",
                 state = "exact",                     # Exact:
@@ -426,7 +394,6 @@ class TestServiceIPAClient(unittest.TestCase, AbstractTestClass):
                 dict(
                     name = 'find existing object',
                     request = self.find_request,
-                    reply = self.current_state['client%d' % (test-1)].final_obj,
                 ),
                 dict(
                     name = 'modify existing object',
@@ -485,12 +452,9 @@ class TestServiceIPAClient(unittest.TestCase, AbstractTestClass):
             ],
         )
 
-        # Persist client between tests
-        self.current_state['client%d' % test] = client
-
     def test_19_service_existing_absent(self):
-        test = 19
-        client = self.runner(
+        self.runner(
+            test_key = 19,
             module_params = dict(
                 krbcanonicalname = "test/host1.example.com@EXAMPLE.COM",
                 state = "absent",                     # Absent whole object
@@ -502,7 +466,6 @@ class TestServiceIPAClient(unittest.TestCase, AbstractTestClass):
                 dict(
                     name = 'find existing object',
                     request = self.find_request,
-                    reply = self.current_state['client%d' % (test-1)].final_obj,
                 ),
                 dict(
                     name = 'modify existing object',
@@ -518,6 +481,4 @@ class TestServiceIPAClient(unittest.TestCase, AbstractTestClass):
             ],
         )
 
-        # Persist client between tests
-        self.current_state['client%d' % test] = client
 

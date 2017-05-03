@@ -23,9 +23,8 @@ class TestCAACLIPAClient(unittest.TestCase, AbstractTestClass):
     )
 
     def test_10_ca_present_new(self):
-        test = 10
-        # Create new object
-        client = self.runner(
+        self.runner(
+            test_key = 10,
             module_params = dict(
                 cn = "Test ACL",
                 description = "ACL for Ansible testing",
@@ -70,12 +69,9 @@ class TestCAACLIPAClient(unittest.TestCase, AbstractTestClass):
             ],
         )
 
-        # Persist client between tests
-        self.current_state['client%d' % test] = client
-
     def test_11_ca_existing_present_listattr(self):
-        test = 11
-        client = self.runner(
+        self.runner(
+            test_key = 11,
             module_params = dict(
                 cn = "Test ACL",
                 user = [ 'user1', 'user3' ], # One redundant, one new
@@ -89,7 +85,6 @@ class TestCAACLIPAClient(unittest.TestCase, AbstractTestClass):
                 dict(
                     name = 'find existing object',
                     request = self.find_request,
-                    reply = self.current_state['client%d' % (test-1)].final_obj,
                 ),
                 dict(
                     name = 'modify existing object',
@@ -111,12 +106,9 @@ class TestCAACLIPAClient(unittest.TestCase, AbstractTestClass):
             ],
         )
 
-        # Persist client between tests
-        self.current_state['client%d' % test] = client
-
     def test_12_ca_existing_absent_listattr(self):
-        test = 12
-        client = self.runner(
+        self.runner(
+            test_key = 12,
             module_params = dict(
                 cn = "Test ACL",
                 user = [ 'user3', 'user4' ], # user3 exists, user4 not
@@ -131,7 +123,6 @@ class TestCAACLIPAClient(unittest.TestCase, AbstractTestClass):
                 dict(
                     name = 'find existing object',
                     request = self.find_request,
-                    reply = self.current_state['client%d' % (test-1)].final_obj,
                 ),
                 dict(
                     name = 'modify existing object',
@@ -153,13 +144,9 @@ class TestCAACLIPAClient(unittest.TestCase, AbstractTestClass):
             ],
         )
 
-        # Persist client between tests
-        self.current_state['client%d' % test] = client
-
-
     def test_13_ca_existing_disable_strattr(self):
-        test = 13
-        client = self.runner(
+        self.runner(
+            test_key = 13,
             module_params = dict(
                 cn = "Test ACL",
                 state = "disabled",               # Disabled; present:
@@ -174,7 +161,6 @@ class TestCAACLIPAClient(unittest.TestCase, AbstractTestClass):
                 dict(
                     name = 'find existing object',
                     request = self.find_request,
-                    reply = self.current_state['client%d' % (test-1)].final_obj,
                 ),
                 dict(
                     name = 'modify existing object',
@@ -209,12 +195,9 @@ class TestCAACLIPAClient(unittest.TestCase, AbstractTestClass):
             ],
         )
 
-        # Persist client between tests
-        self.current_state['client%d' % test] = client
-
     def test_14_ca_existing_exact(self):
-        test = 14
-        client = self.runner(
+        self.runner(
+            test_key = 14,
             module_params = dict(
                 cn = "Test ACL",
                 state = "exact",                  # Exact:
@@ -232,7 +215,6 @@ class TestCAACLIPAClient(unittest.TestCase, AbstractTestClass):
                 dict(
                     name = 'find existing object',
                     request = self.find_request,
-                    reply = self.current_state['client%d' % (test-1)].final_obj,
                 ),
                 dict(
                     name = 'modify existing object',
@@ -255,12 +237,9 @@ class TestCAACLIPAClient(unittest.TestCase, AbstractTestClass):
             ],
         )
 
-        # Persist client between tests
-        self.current_state['client%d' % test] = client
-
     def test_15_ca_existing_enable(self):
-        test = 15
-        client = self.runner(
+        self.runner(
+            test_key = 15,
             module_params = dict(
                 cn = "Test ACL",
                 state = "enabled",                # Enabled, no other changes
@@ -272,7 +251,6 @@ class TestCAACLIPAClient(unittest.TestCase, AbstractTestClass):
                 dict(
                     name = 'find existing object',
                     request = self.find_request,
-                    reply = self.current_state['client%d' % (test-1)].final_obj,
                 ),
                 # No modification call to existing object
                 dict(
@@ -289,12 +267,8 @@ class TestCAACLIPAClient(unittest.TestCase, AbstractTestClass):
             ],
         )
 
-        # Persist client between tests
-        self.current_state['client%d' % test] = client
-
     def test_16_ca_existing_rem(self):
-        test = 16
-        client = self.runner(
+        self.runner(
             module_params = dict(
                 cn = "Test ACL",
                 state = "absent",
@@ -306,7 +280,6 @@ class TestCAACLIPAClient(unittest.TestCase, AbstractTestClass):
                 dict(
                     name = 'find existing object',
                     request = self.find_request,
-                    reply = self.current_state['client%d' % (test-1)].final_obj,
                 ),
                 # No modification call to existing object
                 dict(
@@ -320,6 +293,3 @@ class TestCAACLIPAClient(unittest.TestCase, AbstractTestClass):
                 ),
             ],
         )
-
-        # Persist client between tests
-        self.current_state['client%d' % test] = client

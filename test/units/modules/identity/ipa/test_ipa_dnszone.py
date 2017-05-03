@@ -23,9 +23,8 @@ class TestDNSZoneIPAClient(unittest.TestCase, AbstractTestClass):
     )
 
     def test_10_dnszone_enabled_new(self):
-        test = 10
-        # Create new object
-        client = self.runner(
+        self.runner(
+            test_key = 10,
             module_params = dict(
                 idnsname = "test.example.com",
                 state = "enabled",                  # Enabled:
@@ -69,12 +68,9 @@ class TestDNSZoneIPAClient(unittest.TestCase, AbstractTestClass):
             ],
         )
 
-        # Persist client between tests
-        self.current_state['client%d' % test] = client
-
     def test_11_dnszone_existing_present_attr(self):
-        test = 11
-        client = self.runner(
+        self.runner(
+            test_key = 11,
             module_params = dict(
                 idnsname = "test.example.com",
                 state = "enabled",                  # Enabled:
@@ -88,7 +84,6 @@ class TestDNSZoneIPAClient(unittest.TestCase, AbstractTestClass):
                 dict(
                     name = 'find existing object',
                     request = self.find_request,
-                    reply = self.current_state['client%d' % (test-1)].final_obj,
                 ),
                 dict(
                     name = 'modify existing object',
@@ -106,13 +101,9 @@ class TestDNSZoneIPAClient(unittest.TestCase, AbstractTestClass):
             ],
         )
 
-        # Persist client between tests
-        self.current_state['client%d' % test] = client
-
     def test_12_dnszone_disabled_existing(self):
-        test = 12
-        # Disable object w/no other changes
-        client = self.runner(
+        self.runner(
+            test_key = 12,
             module_params = dict(
                 idnsname = "test.example.com",
                 state = "disabled",                  # Disabled
@@ -124,7 +115,6 @@ class TestDNSZoneIPAClient(unittest.TestCase, AbstractTestClass):
                 dict(
                     name = 'find existing object',
                     request = self.find_request,
-                    reply = self.current_state['client%d' % (test-1)].final_obj,
                 ),
                 dict(
                     name = 'disable existing object',
@@ -138,13 +128,9 @@ class TestDNSZoneIPAClient(unittest.TestCase, AbstractTestClass):
             ],
         )
 
-        # Persist client between tests
-        self.current_state['client%d' % test] = client
-
     def test_13_dnszone_remove_existing(self):
-        test = 13
-        # Remove object
-        client = self.runner(
+        self.runner(
+            test_key = 13,
             module_params = dict(
                 idnsname = "test.example.com",
                 state = "absent",                  # Absent
@@ -156,7 +142,6 @@ class TestDNSZoneIPAClient(unittest.TestCase, AbstractTestClass):
                 dict(
                     name = 'find existing object',
                     request = self.find_request,
-                    reply = self.current_state['client%d' % (test-1)].final_obj,
                 ),
                 dict(
                     name = 'disable existing object',
@@ -169,7 +154,4 @@ class TestDNSZoneIPAClient(unittest.TestCase, AbstractTestClass):
                 ),
             ],
         )
-
-        # Persist client between tests
-        self.current_state['client%d' % test] = client
 

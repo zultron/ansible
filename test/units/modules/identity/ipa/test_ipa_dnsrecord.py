@@ -23,9 +23,8 @@ class TestDNSRecordIPAClient(unittest.TestCase, AbstractTestClass):
     )
 
     def test_10_dnsrecord_present_new(self):
-        test = 10
-        # Create new object
-        client = self.runner(
+        self.runner(
+            test_key = 10,
             module_params = dict(
                 zone = "example.com",
                 idnsname = "host1",
@@ -62,12 +61,9 @@ class TestDNSRecordIPAClient(unittest.TestCase, AbstractTestClass):
             ],
         )
 
-        # Persist client between tests
-        self.current_state['client%d' % test] = client
-
     def test_11_dnsrecord_existing_present_listattr(self):
-        test = 11
-        client = self.runner(
+        self.runner(
+            test_key = 11,
             module_params = dict(
                 zone = "example.com",
                 idnsname = "host1",
@@ -85,7 +81,6 @@ class TestDNSRecordIPAClient(unittest.TestCase, AbstractTestClass):
                 dict(
                     name = 'find existing object',
                     request = self.find_request,
-                    reply = self.current_state['client%d' % (test-1)].final_obj,
                 ),
                 dict(
                     name = 'modify existing object',
@@ -112,12 +107,9 @@ class TestDNSRecordIPAClient(unittest.TestCase, AbstractTestClass):
             ],
         )
 
-        # Persist client between tests
-        self.current_state['client%d' % test] = client
-
     def test_12_dnsrecord_existing_absent_listattr(self):
-        test = 12
-        client = self.runner(
+        self.runner(
+            test_key = 12,
             module_params = dict(
                 zone = "example.com",
                 idnsname = "host1",
@@ -137,7 +129,6 @@ class TestDNSRecordIPAClient(unittest.TestCase, AbstractTestClass):
                 dict(
                     name = 'find existing object',
                     request = self.find_request,
-                    reply = self.current_state['client%d' % (test-1)].final_obj,
                 ),
                 dict(
                     name = 'delete attributes from existing object',
@@ -161,12 +152,9 @@ class TestDNSRecordIPAClient(unittest.TestCase, AbstractTestClass):
             ],
         )
 
-        # Persist client between tests
-        self.current_state['client%d' % test] = client
-
     def test_13_dnsrecord_existing_exact(self):
-        test = 13
-        client = self.runner(
+        self.runner(
+            test_key = 13,
             module_params = dict(
                 zone = "example.com",
                 idnsname = "host1",
@@ -184,7 +172,6 @@ class TestDNSRecordIPAClient(unittest.TestCase, AbstractTestClass):
                 dict(
                     name = 'find existing object',
                     request = self.find_request,
-                    reply = self.current_state['client%d' % (test-1)].final_obj,
                 ),
                 dict(
                     name = 'exact modify existing object',
@@ -211,12 +198,9 @@ class TestDNSRecordIPAClient(unittest.TestCase, AbstractTestClass):
             ],
         )
 
-        # Persist client between tests
-        self.current_state['client%d' % test] = client
-
     def test_14_dnsrecord_existing_absent_object(self):
-        test = 14
-        client = self.runner(
+        self.runner(
+            test_key = 14,
             module_params = dict(
                 zone = "example.com",
                 idnsname = "host1",
@@ -229,7 +213,6 @@ class TestDNSRecordIPAClient(unittest.TestCase, AbstractTestClass):
                 dict(
                     name = 'find existing object',
                     request = self.find_request,
-                    reply = self.current_state['client%d' % (test-1)].final_obj,
                 ),
                 dict(
                     name = 'remove existing object',
@@ -243,6 +226,3 @@ class TestDNSRecordIPAClient(unittest.TestCase, AbstractTestClass):
                 # No enable/disable operation
             ],
         )
-
-        # Persist client between tests
-        self.current_state['client%d' % test] = client

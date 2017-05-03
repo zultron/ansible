@@ -257,22 +257,59 @@ class AbstractTestClass(object):
         self.assertEqual(new_client._post_json.call_count, 0)
         print "*** Idempotency enable_or_disable():  success"
 
-    def runner(self, module_params = None, post_json_calls=None):
+
+    # Track state from test to test
+    current_state = {}
+
+    @property
+    def previous_client(self):
+        previous_test_key = self.test_key - 1
+        if previous_test_key not in self.current_state:
+            raise unittest.SkipTest(
+                'Client for test index %d not available' % previous_test_key)
+        return self.current_state[previous_test_key]['client']
+
+    def persist_client(self, client):
+        self.current_state.setdefault(self.test_key,{})['client'] = client
+
+    def runner(self, test_key, module_params = None, post_json_calls=None):
+        # test_key is an integer used to persist data between tests,
+        # guaranteeing order
+        self.test_key = test_key
+
         #
-        # Set up patched test object
+        # Set up reply list
         #
 
         # - Pre-ordained set of replies from _post_json()
         reply_list = []
-        for c in post_json_calls:
-            # Recycle previous reply if no new one given
-            reply = deepcopy(c.get('reply',([None]+reply_list)[-1]))
+        for i, c in enumerate(post_json_calls):
+            if 'reply' not in c:
+                # Generate 'reply' key/value when not supplied
+                if i == 0:
+                    # For initial find() request, use the previous
+                    # client final_obj
+                    reply = deepcopy(self.previous_client.final_obj)
+                else:
+                    # For later requests, recycle the previous reply
+                    reply = deepcopy(reply_list[-1])
+            else:
+                reply = c['reply']
+            # Apply any updates
             reply.update(deepcopy(c.get('reply_updates',{})))
+            # Save reply for next round
             reply_list.append(reply)
+
+        #
+        # Set up patched test object
+        #
+
         # - Patched test class instance
         client1 = self.get_tst_class(
             module_params = deepcopy(module_params),
             side_effect = deepcopy(reply_list))
+        # - Save instance for later tests
+        self.persist_client(client1)
 
         #
         # Run ensure()
@@ -346,4 +383,4 @@ class AbstractTestClass(object):
         self.assertEqual(client2._post_json.call_count, 1)
         print "\n*** SUCCESS"
 
-        return client1
+
