@@ -94,169 +94,8 @@ class AbstractTestClass(object):
 
 
     #################################################################
-    # add_or_mod()
+    # runner()
     #################################################################
-
-    def add_or_mod_helper(self, test_data_attr):
-        test_data = deepcopy(getattr(self, test_data_attr))
-        if isinstance(test_data, basestring):
-            raise unittest.SkipTest(test_data)
-
-
-        #
-        # Set up patched test object
-        #
-
-        # Module params, i.e. task params
-        module_params = test_data.get('module_params',self.module_params).copy()
-        module_params.update(test_data.get('module_params_updates',{}))
-        # Mocked output of `objtype_find()` API call
-        found_obj = deepcopy(test_data.get('found_obj',{}))
-        found_obj.update(test_data.get('found_obj_updates',{}))
-        # Get patched test class instance
-        client = self.get_tst_class(
-            module_params = module_params,
-            found_obj = found_obj)
-
-        #
-        # Run find()
-        #
-
-        client.find()
-        print "*** find() found_obj:"; pprint(client.found_obj)
-        # Sanity check: verify expected state
-        self.assertEqual(module_params['state'], client.state)
-        # Sanity check: found object
-        if 'dn' in test_data.get('found_obj',{}):
-            self.assertEqual(test_data['found_obj']['dn'],
-                             client.found_obj.get('dn',None))
-
-        #
-        # Run and verify add_or_mod()
-        #
-
-        # Reset mock object
-        self.mock_post_json.reset_mock()
-        # Set add/mod API call mock return value
-        updated_obj = deepcopy(test_data.get('updated_obj',found_obj))
-        updated_obj.update(test_data.get('updated_obj_updates',{}))
-        self.mock_post_json.return_value = updated_obj
-
-        # Exercise add_or_mod()
-        client.add_or_mod()
-
-        # Verify the call happened...
-        self.assertEqual(client._post_json.call_count, 1)
-        print "*** add_or_mod() call_args:"
-        pprint (client._post_json.call_args[1])
-        self.maxDiff = None
-        self.assertEqual(test_data['aom_params'],
-                         client._post_json.call_args[1])
-        print "*** add_or_mod() updated_obj:"; pprint(client.updated_obj)
-
-        #
-        # enable_or_disable()
-        #
-        eod_should_run = (
-            'eod_params' in test_data or \
-            (module_params['state'] == 'disabled' and client.is_enabled) or \
-            (module_params['state'] == 'enabled' and not client.is_enabled))
-        print '*** enable_or_disable():' \
-            '  eod_should_run=%s; have eod_params=%s' % \
-            (eod_should_run, 'eod_params' in test_data)
-
-        # Reset mock object
-        self.mock_post_json.reset_mock()
-        # Set enable/disable API call mock return value
-        final_obj = deepcopy(test_data.get('final_obj', updated_obj))
-        final_obj.update(test_data.get('final_obj_updates',{}))
-        self.mock_post_json.return_value = final_obj
-        # Run enable_or_disable()
-        client.enable_or_disable()
-
-        # Verify the call happened if it should have
-        self.assertEqual(client._post_json.call_count,
-                         1 if eod_should_run else 0)
-
-        if eod_should_run:
-            print "*** enable_or_disable() call_args:"
-            pprint (client._post_json.call_args[1])
-
-            # Verify eod() API request
-            if 'eod_params' in test_data:
-                self.assertEqual(test_data['eod_params'],
-                                 client._post_json.call_args[1])
-
-        # Return client for idempotent run
-        return client
-        
-    def idempotency_helper(self, old_client, test_data_attr):
-        if not hasattr(self, test_data_attr):
-            return
-        test_data = getattr(self, test_data_attr)
-
-        #
-        # Set up patched test object
-        #
-
-        # Module params, i.e. task params
-        module_params = test_data.get('module_params',self.module_params).copy()
-        module_params.update(test_data.get('module_params_updates',{}))
-        # Mocked output of `objtype_find()` API call
-        found_obj = deepcopy(
-            test_data.get('idempotent_obj',old_client.final_obj))
-        found_obj.update(test_data.get('idempotent_obj_updates',{}))
-        # Get patched test class instance
-        new_client = self.get_tst_class(
-            module_params = module_params,
-            found_obj = found_obj)
-        # Run find()
-        new_client.find()
-
-        #
-        # Run and verify add_or_mod()
-        #
-
-        # Reset mock object
-        self.mock_post_json.reset_mock()
-        # Set add/mod API call mock return value
-        self.mock_post_json.return_value = deepcopy(found_obj)
-        # Exercise add_or_mod()
-        new_client.add_or_mod()
-        # Verify the call did NOT happen (or print debug info & fail)
-        if new_client._post_json.call_count > 0:
-            print "*** idempotency error:  add_or_mod()"
-            print "--- module_params:"
-            pprint (module_params)
-            print "--- found_obj:"
-            pprint (new_client.found_obj)
-            print "--- call_args:"
-            pprint (new_client._post_json.call_args[1])
-        self.assertEqual(new_client._post_json.call_count, 0)
-        print "*** Idempotency add_or_mod():  success"
-
-        #
-        # Run and verify enable_or_disable()
-        #
-
-        # Reset mock object
-        self.mock_post_json.reset_mock()
-        # Set enable/disable API call mock return value
-        self.mock_post_json.return_value = deepcopy(found_obj)
-        # Run enable_or_disable()
-        new_client.enable_or_disable()
-        # Verify the call did NOT happen
-        if new_client._post_json.call_count > 0:
-            print "*** idempotency error:  enable_or_disable()"
-            print "--- module_params:"
-            pprint (module_params)
-            print "--- found_obj:"
-            pprint (found_obj)
-            print "--- call_args:"
-            pprint (new_client._post_json.call_args[1])
-        self.assertEqual(new_client._post_json.call_count, 0)
-        print "*** Idempotency enable_or_disable():  success"
-
 
     # Track state from test to test
     current_state = {}
@@ -330,13 +169,17 @@ class AbstractTestClass(object):
             print "--- Reply:"
             pprint(reply)
 
+        # - find() call parameters
+        self.assertEqual(post_json_calls[0]['request'],
+                         client1._post_json.call_args_list[0][1])
+
         # - Number of calls to _post_json
         self.assertEqual(client1._post_json.call_count, len(post_json_calls))
 
-        # - Call parameters
+        # - Following call parameters
         for request, call in \
-            zip(client1._post_json.call_args_list, post_json_calls):
-            self.assertEqual(request[1],call['request'])
+            zip(client1._post_json.call_args_list[1:], post_json_calls[1:]):
+            self.assertEqual(call['request'],request[1])
 
         # - DN of found object
         if 'dn' in reply_list[0]:
@@ -381,6 +224,13 @@ class AbstractTestClass(object):
             pprint(request[1])
             print "--- Expected request:"
             pprint(call['request'])
+        if client2._post_json.call_count > 1:
+            try:
+                print "--- Cleaned module params:"
+                pprint(client2.change_params)
+                print "--- Cleaned find reply params:"
+                pprint(client2.curr_params)
+            except: pass
         print "--- Got result:"
         pprint(client2.final_obj)
 

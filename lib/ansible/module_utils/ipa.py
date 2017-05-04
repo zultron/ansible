@@ -251,7 +251,7 @@ class IPAClient(object):
             res.append(m.group(1))
         return res
 
-    def filter_value(self, key, val, dirty, item):
+    def filter_value(self, key, val, dirty, item, action):
         # Subclasses may override this; return True when item was processed
         return False
 
@@ -306,10 +306,18 @@ class IPAClient(object):
             method=self._methods[action],
         )
 
+    def find_request_cleanup(self, request):
+        # Classes may override to munge request
+        pass
+
     def find(self):
         request = self.clean(self.module.params, 'find')
         request['item'].update(dict(all=True))
         request['item'].update(self.extra_find_args)
+
+        # Do any last-minute request patching
+        self.find_request_cleanup(request)
+
         self.final_obj = self.updated_obj = self.found_obj = \
                          self._post_json(**request)
 
@@ -330,10 +338,10 @@ class IPAClient(object):
     def compute_changes(self):
         request = self.clean(self.module.params,
                              action = 'mod' if self.found_obj else 'add')
-        change_params = request['item']
+        self.change_params = change_params = request['item']
         current = self.clean(self.found_obj, curr=True,
                              action = 'mod' if self.found_obj else 'add')
-        curr_params = current['item']
+        self.curr_params = curr_params = current['item']
 
         changes = {'addattr':{}, 'delattr':{}, 'setattr':{}}
 
@@ -426,10 +434,15 @@ class IPAClient(object):
         request = self.clean(self.module.params, action=self.state)
         self.final_obj = self._post_json(**request)
         
+    def rem_request_cleanup(self, request):
+        # Classes may override to munge request
+        pass
+
     def rem(self):
         if self.module.check_mode: return
 
         request = self.clean(self.module.params, 'rem')
+        self.rem_request_cleanup(request)
         self.final_obj = self.updated_obj = self._post_json(**request)
 
     def ensure(self):

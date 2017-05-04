@@ -176,7 +176,7 @@ class ServiceIPAClient(IPAClient):
             type='list', required=False),
     )
 
-    def filter_value(self, key, val, dirty, item):
+    def filter_value(self, key, val, dirty, item, action):
         if key == 'krbprincipalname':
             # krbprincipalname list:  This list of principal aliases
             # always includes the principal canonical name.  Aliases
