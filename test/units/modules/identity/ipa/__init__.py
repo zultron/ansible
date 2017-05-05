@@ -7,6 +7,7 @@ from ansible.compat.tests.mock import call, create_autospec, patch, MagicMock
 
 from copy import deepcopy
 from pprint import pprint
+import os
 
 class AbstractTestClass(object):
 
@@ -27,30 +28,51 @@ class AbstractTestClass(object):
     @patch('ansible.module_utils.ipa.AnsibleModule', autospec=True)
     def get_tst_class(self, mod_cls,
                       module_params={},
-                      module_params_updates={},
-                      found_obj={},
-                      side_effect=None):
-        # Mock AnsibleModule instance with attributes
+                      side_effect=(lambda *args,**kwargs: {}),
+                      live_host_ok=True):
+
+        # Setup variables for running against a live IPA service
+        self.live_host = live_host_ok and os.getenv('IPA_HOST', False)
+
+        # Mock AnsibleModule instance
         mod = mod_cls.return_value
+        # Turn off check mode
         mod.check_mode = False
-        # Set up module params for test
+        # Add module params
         mod.params = module_params.copy() or self.module_params.copy()
-        mod.params.update(module_params_updates)
-        # Set up fail_json() method
+        # The fail_json() method must raise an exception
         def raise_exception(msg):  raise RuntimeError(msg)
         mod.fail_json = MagicMock(side_effect=raise_exception)
 
-        # Create instance
+        # Create test class instance
         client = self.test_class()
+        if self.live_host:
+            client.login()
 
         # Check that AnsibleModule class was correctly patched
         assert client.module is mod
 
-        # Patch _post_json method (object only, not class)
-        if side_effect is not None:
-            self.mock_post_json = MagicMock(side_effect=side_effect)
+        # Configure IPA service
+        if self.live_host:
+            # Real IPA host
+            self.ipa_host = os.getenv('IPA_HOST')
+            self.ipa_user = os.getenv('IPA_USER')
+            self.ipa_pass = os.getenv('IPA_PASS')
         else:
-            self.mock_post_json = MagicMock(return_value=found_obj)
+            # Fake IPA host
+            self.ipa_host = 'host1.example.com'
+            self.ipa_user = 'admin'
+            self.ipa_pass = 'secretpass'
+
+        # Patch _post_json() method (patch instance, not class)
+        if self.live_host:
+            # Run the real _post_json() via Mock so we can examine
+            # calls
+            self.mock_post_json = MagicMock(
+                side_effect=self.test_class._post_json)
+        else:
+            self.mock_post_json = MagicMock(
+                side_effect=side_effect)
         client._post_json = self.mock_post_json
 
         return client
@@ -61,7 +83,7 @@ class AbstractTestClass(object):
 
     def test_01_init(self):
         # Test module's basic consistency; instance doesn't matter
-        client = self.get_tst_class()
+        client = self.get_tst_class(live_host_ok=False)
 
         # Verify client._methods keys
         self.assertEqual(set(self.test_class.methods.keys()),
