@@ -7,6 +7,8 @@ from . import AbstractTestClass
 
 from ansible.modules.identity.ipa.ipa_dnszone import DNSZoneIPAClient
 
+import os
+
 class TestDNSZoneIPAClient(unittest.TestCase, AbstractTestClass):
 
     test_class = DNSZoneIPAClient
@@ -14,25 +16,34 @@ class TestDNSZoneIPAClient(unittest.TestCase, AbstractTestClass):
     # Track state from test to test
     current_state = {}
 
-    find_request = dict(
-        method='dnszone_find',
-        name=[None],
-        item=dict(all = True,
-                  idnsname = 'test.example.com' ),
-    )
+    @property
+    def find_request(self):
+        return dict(
+            method='dnszone_find',
+            name=[None],
+            item=dict(all = True,
+                      idnsname = 'test.%s' % self.domain ),
+        )
 
     def test_10_dnszone_enabled_new(self):
+        if self.live_host:
+            nsrecord = os.getenv('IPA_NSRECORD', None)
+            if nsrecord is None:
+                raise RuntimeError(
+                    "IPA_NSRECORD environment variable must be set"
+                    " in live host mode; e.g. 'host1.example.com.'")
+            self.nsrecord = nsrecord.split(',')
+        else:
+            self.nsrecord = ['host2.%s' % self.domain]
+
         self.runner(
             test_key = 10,
             module_params = dict(
-                idnsname = "test.example.com",
-                state = "enabled",                  # Enabled:
-                idnsallowdynupdate = True,          # Add
-                idnsallowtransfer = "none;",        # Add
-                nsrecord = "host2.example.com.",    # Add
-                ipa_host = "host1.example.com",
-                ipa_user = "admin",
-                ipa_pass = "secretpass",
+                idnsname = "test.%s" % self.domain,
+                state = "enabled",                    # Enabled:
+                idnsallowdynupdate = True,            # Add
+                idnsallowtransfer = "none;",          # Add
+                nsrecord = self.nsrecord,             # Add
             ),
             post_json_calls = [
                 dict(
@@ -43,25 +54,20 @@ class TestDNSZoneIPAClient(unittest.TestCase, AbstractTestClass):
                 dict(
                     name = 'add new object',
                     request = {
-                        'item' : {'setattr': ['idnsallowdynupdate=True',
-                                              'idnsallowtransfer=none;',
-                                              'nsrecord=host2.example.com.'],
-                                  'delattr': [], 'addattr': [], 'all': True},
+                        'item' : {'setattr': (['idnsallowdynupdate=True',
+                                               'idnsallowtransfer=none;' ] +
+                                              ['nsrecord=%s' % r
+                                               for r in self.nsrecord]),
+                                  'all': True},
                         'method' : 'dnszone_add',
-                        'name' : ['test.example.com']},
+                        'name' : ['test.%s' % self.domain]},
                     reply_updates = {
                         'idnsallowdynupdate': ['True'],
                         'idnsallowtransfer': ['none;'],
-                        'nsrecord': ['host2.example.com.']},
+                        'nsrecord': self.nsrecord,
+                        'idnszoneactive': [u'TRUE']},
                 ),
-                dict(
-                    name = 'enable new object',
-                    request = {
-                        'item' : {},
-                        'method' : 'dnszone_enable',
-                        'name' : ['test.example.com']},
-                    reply_updates = { 'idnszoneactive': ['TRUE'] },
-                ),
+                # No enable call, since zones are created enabled
             ],
         )
 
@@ -69,13 +75,10 @@ class TestDNSZoneIPAClient(unittest.TestCase, AbstractTestClass):
         self.runner(
             test_key = 11,
             module_params = dict(
-                idnsname = "test.example.com",
+                idnsname = "test.%s" % self.domain,
                 state = "enabled",                  # Enabled:
                 idnsallowdynupdate = False,         # Modify
                 idnsallowtransfer = "none;",        # Noop
-                ipa_host = "host1.example.com",
-                ipa_user = "admin",
-                ipa_pass = "secretpass",
             ),
             post_json_calls = [
                 dict(
@@ -86,9 +89,9 @@ class TestDNSZoneIPAClient(unittest.TestCase, AbstractTestClass):
                     name = 'modify existing object',
                     request = {
                         'item' : {'setattr': ['idnsallowdynupdate=False' ],
-                                  'addattr': [], 'delattr': [], 'all': True},
+                                  'all': True},
                         'method' : 'dnszone_mod',
-                        'name' : ['test.example.com']},
+                        'name' : ['test.%s' % self.domain]},
                     reply_updates = {
                         'idnsallowdynupdate': ['FALSE'],
                     },
@@ -101,11 +104,8 @@ class TestDNSZoneIPAClient(unittest.TestCase, AbstractTestClass):
         self.runner(
             test_key = 12,
             module_params = dict(
-                idnsname = "test.example.com",
+                idnsname = "test.%s" % self.domain,
                 state = "disabled",                  # Disabled
-                ipa_host = "host1.example.com",
-                ipa_user = "admin",
-                ipa_pass = "secretpass",
             ),
             post_json_calls = [
                 dict(
@@ -117,7 +117,7 @@ class TestDNSZoneIPAClient(unittest.TestCase, AbstractTestClass):
                     request = {
                         'item' : {},
                         'method' : 'dnszone_disable',
-                        'name' : ['test.example.com']},
+                        'name' : ['test.%s' % self.domain]},
                     reply_updates = { 'idnszoneactive': ['FALSE'] },
                 ),
             ],
@@ -127,11 +127,8 @@ class TestDNSZoneIPAClient(unittest.TestCase, AbstractTestClass):
         self.runner(
             test_key = 13,
             module_params = dict(
-                idnsname = "test.example.com",
+                idnsname = "test.%s" % self.domain,
                 state = "absent",                  # Absent
-                ipa_host = "host1.example.com",
-                ipa_user = "admin",
-                ipa_pass = "secretpass",
             ),
             post_json_calls = [
                 dict(
@@ -143,7 +140,7 @@ class TestDNSZoneIPAClient(unittest.TestCase, AbstractTestClass):
                     request = {
                         'item' : {},
                         'method' : 'dnszone_del',
-                        'name' : ['test.example.com']},
+                        'name' : ['test.%s' % self.domain]},
                     reply = {},
                 ),
             ],

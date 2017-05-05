@@ -23,16 +23,25 @@ class AbstractTestClass(object):
         # ipa_pass = "secretpass",
     )
 
+    live_host = os.getenv('IPA_HOST', False)
 
+    @property
+    def domain(self):
+        return os.getenv('IPA_DOMAIN', 'example.com')
 
     @patch('ansible.module_utils.ipa.AnsibleModule', autospec=True)
     def get_tst_class(self, mod_cls,
                       module_params={},
-                      side_effect=(lambda *args,**kwargs: {}),
+                      reply_list=[],
                       live_host_ok=True):
 
-        # Setup variables for running against a live IPA service
-        self.live_host = live_host_ok and os.getenv('IPA_HOST', False)
+        live_host = self.live_host and live_host_ok
+
+        # Init reply_list
+        if live_host:
+            self.reply_list = []
+        else:
+            self.reply_list = reply_list
 
         # Mock AnsibleModule instance
         mod = mod_cls.return_value
@@ -40,39 +49,43 @@ class AbstractTestClass(object):
         mod.check_mode = False
         # Add module params
         mod.params = module_params.copy() or self.module_params.copy()
+        if live_host:
+            mod.params.update(dict(
+                ipa_host = os.getenv('IPA_HOST'),
+                ipa_user = os.getenv('IPA_USER'),
+                ipa_pass = os.getenv('IPA_PASS')))
+        else:
+            mod.params.update(dict(
+            ipa_host = 'host1.example.com',
+            ipa_user = 'admin',
+            ipa_pass = 'secretpass'))
+        mod.params['ipa_prot'] = 'https'
         # The fail_json() method must raise an exception
         def raise_exception(msg):  raise RuntimeError(msg)
         mod.fail_json = MagicMock(side_effect=raise_exception)
 
         # Create test class instance
         client = self.test_class()
-        if self.live_host:
+        if live_host:
             client.login()
 
         # Check that AnsibleModule class was correctly patched
         assert client.module is mod
 
-        # Configure IPA service
-        if self.live_host:
-            # Real IPA host
-            self.ipa_host = os.getenv('IPA_HOST')
-            self.ipa_user = os.getenv('IPA_USER')
-            self.ipa_pass = os.getenv('IPA_PASS')
-        else:
-            # Fake IPA host
-            self.ipa_host = 'host1.example.com'
-            self.ipa_user = 'admin'
-            self.ipa_pass = 'secretpass'
-
         # Patch _post_json() method (patch instance, not class)
-        if self.live_host:
+        if live_host:
             # Run the real _post_json() via Mock so we can examine
             # calls
+            pj = client._post_json
+            def _post_json_wrapper(*args, **kwargs):
+                reply = pj(*args, **kwargs)
+                self.reply_list.append(reply)
+                return reply
             self.mock_post_json = MagicMock(
-                side_effect=self.test_class._post_json)
+                side_effect=_post_json_wrapper)
         else:
             self.mock_post_json = MagicMock(
-                side_effect=side_effect)
+                side_effect=self.reply_list)
         client._post_json = self.mock_post_json
 
         return client
@@ -144,22 +157,23 @@ class AbstractTestClass(object):
 
         # - Pre-ordained set of replies from _post_json()
         reply_list = []
-        for i, c in enumerate(post_json_calls):
-            if 'reply' not in c:
-                # Generate 'reply' key/value when not supplied
-                if i == 0:
-                    # For initial find() request, use the previous
-                    # client final_obj
-                    reply = deepcopy(self.previous_client.final_obj)
+        if not self.live_host:
+            for i, c in enumerate(post_json_calls):
+                if 'reply' not in c:
+                    # Generate 'reply' key/value when not supplied
+                    if i == 0:
+                        # For initial find() request, use the previous
+                        # client final_obj
+                        reply = deepcopy(self.previous_client.final_obj)
+                    else:
+                        # For later requests, recycle the previous reply
+                        reply = deepcopy(reply_list[-1])
                 else:
-                    # For later requests, recycle the previous reply
-                    reply = deepcopy(reply_list[-1])
-            else:
-                reply = c['reply']
-            # Apply any updates
-            reply.update(deepcopy(c.get('reply_updates',{})))
-            # Save reply for next round
-            reply_list.append(reply)
+                    reply = c['reply']
+                # Apply any updates
+                reply.update(deepcopy(c.get('reply_updates',{})))
+                # Save reply for next round
+                reply_list.append(reply)
 
         #
         # Set up patched test object
@@ -168,9 +182,7 @@ class AbstractTestClass(object):
         # - Patched test class instance
         client1 = self.get_tst_class(
             module_params = deepcopy(module_params),
-            side_effect = deepcopy(reply_list))
-        # - Save instance for later tests
-        self.persist_client(client1)
+            reply_list = deepcopy(reply_list))
 
         #
         # Run ensure()
@@ -182,7 +194,9 @@ class AbstractTestClass(object):
         #
         print "Number of calls: %d" % client1._post_json.call_count
         for request, call, reply in \
-            zip(client1._post_json.call_args_list, post_json_calls, reply_list):
+            zip(client1._post_json.call_args_list,
+                post_json_calls,
+                self.reply_list):
             print "\n*** Request:  %s" % call['name']
             print "--- Sent:"
             pprint(request[1])
@@ -203,10 +217,11 @@ class AbstractTestClass(object):
             zip(client1._post_json.call_args_list[1:], post_json_calls[1:]):
             self.assertEqual(call['request'],request[1])
 
-        # - DN of found object
-        if 'dn' in reply_list[0]:
-            self.assertEqual(reply_list[0]['dn'],
-                             client1.found_obj.get('dn',None))
+        # - Changed
+        self.assertTrue(client1.changed)
+
+        # - Save instance for later tests
+        self.persist_client(client1)
 
         ###################################
         # Idempotency
@@ -223,7 +238,7 @@ class AbstractTestClass(object):
         # - Patched test class instance
         client2 = self.get_tst_class(
             module_params = deepcopy(module_params),
-            side_effect = [found_obj])
+            reply_list = [deepcopy(found_obj)])
 
         #
         # Run ensure()
@@ -240,24 +255,27 @@ class AbstractTestClass(object):
         #
 
         # Verify ONLY the find call happened (or print debug info & fail)
-        for request, call in \
-            zip(client2._post_json.call_args_list, post_json_calls):
-            print "--- Sent request:"
-            pprint(request[1])
-            print "--- Expected request:"
-            pprint(call['request'])
+        print "--- Sent find() request:"
+        pprint(client2._post_json.call_args_list[0][1])
+        print "--- Expected find() request:"
+        pprint(post_json_calls[0]['request'])
+        print "--- Reply:"
+        pprint(client2.found_obj)
         if client2._post_json.call_count > 1:
             try:
                 print "--- Cleaned module params:"
                 pprint(client2.change_params)
                 print "--- Cleaned find reply params:"
                 pprint(client2.curr_params)
+                print "--- Second request:"
+                pprint(client2._post_json.call_args_list[1][1])
             except: pass
-        print "--- Got result:"
-        pprint(client2.final_obj)
 
         # Raise any earlier exception
         if raised_exception:  raise
+
+        # - Changed
+        self.assertFalse(client2.changed)
 
         if raised_exception or client2._post_json.call_count != 1:
             print "\n*** Idempotency error"

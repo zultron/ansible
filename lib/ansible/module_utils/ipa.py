@@ -231,11 +231,10 @@ class IPAClient(object):
             result = resp.get('result')
             if 'result' in result:
                 result = result.get('result')
-                if isinstance(result, list) and \
-                   method == self.methods['find'] and \
-                   self.find_filter is not None:
+            if isinstance(result, list) and method == self._methods['find']:
+                if self.find_filter is not None:
                     result = [ i for i in result if self.find_filter(i) ]
-                    return (result[-1] if len(result) > 0 else {})
+                return (result[-1] if len(result) > 0 else {})
             return result
         return None
 
@@ -335,6 +334,14 @@ class IPAClient(object):
             if res_val: res.setdefault(key,[]).extend(res_val)
         return res
 
+    def is_changed(self, request):
+        # Compute whether request would cause a change; subclasses may
+        # override
+        item = request['item']
+        return bool(item.get('addattr',False)) \
+            or bool(item.get('delattr',False)) \
+            or bool(item.get('setattr',False))
+
     def compute_changes(self):
         request = self.clean(self.module.params,
                              action = 'mod' if self.found_obj else 'add')
@@ -376,8 +383,9 @@ class IPAClient(object):
         # Do any last-minute request patching
         self.request_cleanup(request)
 
-        self.changed = bool(changes['addattr'] or changes['delattr']
-                            or changes['setattr'])
+        # Record whether request would be a change
+        self.changed = self.is_changed(request)
+
         return request
 
     def expand_changes(self, request):
@@ -388,6 +396,12 @@ class IPAClient(object):
                 for val in val_list:
                     expanded_changes[op].append("%s=%s" % (attr, val))
             expanded_changes[op].sort() # Sort for unit tests
+
+        # Remove empty lists
+        for key in ('addattr','delattr','setattr'):
+            if len(expanded_changes[key]) == 0:
+                expanded_changes.pop(key)
+
         request['item'] = expanded_changes
 
     def request_cleanup(self, request):
@@ -444,6 +458,7 @@ class IPAClient(object):
         request = self.clean(self.module.params, 'rem')
         self.rem_request_cleanup(request)
         self.final_obj = self.updated_obj = self._post_json(**request)
+        self.changed = True
 
     def ensure(self):
 
@@ -460,7 +475,7 @@ class IPAClient(object):
             if not self.clean(self.module.params, 'mod')['item']:
                 # No keys in request:  remove whole object
                 self.rem()
-                return True, {}
+                return self.changed, {}
             # Otherwise, 'absent' means to remove items from list keys
 
         # Effect changes
