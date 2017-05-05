@@ -36,13 +36,6 @@ class TestCAIPAClient(unittest.TestCase, AbstractTestClass):
                     name = 'find new object',
                     request = self.find_request,
                     reply = {},
-                    # reply = {
-                    #     "cn": [ "Test CA" ],
-                    #     "dn": "cn=Test CA,cn=cas,cn=ca,dc=example,dc=com",
-                    #     "ipacaid": [ "a668e97e-2015-415d-a353-c25297950516" ], 
-                    #     "ipacaissuerdn": [ "CN=Certificate Authority,O=EXAMPLE.COM" ],
-                    #     "ipacasubjectdn": [ "CN=Test CA,O=EXAMPLE.COM" ],
-                    # },
                 ),
                 dict(
                     name = 'add new object',
