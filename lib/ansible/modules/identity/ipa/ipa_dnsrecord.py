@@ -167,6 +167,9 @@ class DNSRecordIPAClient(IPAClient):
             type='list', required=False),
     )
 
+    def rem_request_cleanup(self, request):
+        request['item']['del_all'] = True
+
 def main():
     DNSRecordIPAClient().main()
 
