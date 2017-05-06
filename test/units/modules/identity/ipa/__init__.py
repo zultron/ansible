@@ -187,23 +187,40 @@ class AbstractTestClass(object):
         #
         # Run ensure()
         #
-        client1.ensure()
+        try:
+            client1.ensure()
+            raised_exception = False
+        except:
+            # Defer raising exception until after printing debug info
+            raised_exception = True
 
         #
         # Verify run
         #
         print "Number of calls: %d" % client1._post_json.call_count
-        for request, call, reply in \
-            zip(client1._post_json.call_args_list,
-                post_json_calls,
-                self.reply_list):
-            print "\n*** Request:  %s" % call['name']
-            print "--- Sent:"
-            pprint(request[1])
-            print "--- Expected:"
-            pprint(call['request'])
-            print "--- Reply:"
-            pprint(reply)
+        for i in range(3):
+            if client1._post_json.call_count > i:
+                print "*** Call #%d" % i
+                try:
+                    if i > 1 and \
+                       client1._post_json.call_args_list[i][1]['method'] in (
+                           client1._methods['add'], client1._methods['mod']):
+                        print "--- Cleaned module params:"
+                        pprint(client1.change_params)
+                        print "--- Cleaned find reply params:"
+                        pprint(client1.curr_params)
+                    print "--- Request #%d:" % i
+                    pprint(client1._post_json.call_args_list[i][1])
+                    print "--- Expected request #%d:" % i
+                    pprint(post_json_calls[i]['request'])
+                    print "--- Reply:"
+                    pprint(client1.found_obj if i==0 \
+                           else client1.updated_obj if i==1 \
+                           else client1.final_obj)
+                except: pass
+
+        # Raise any earlier exception
+        if raised_exception:  raise
 
         # - find() call parameters
         self.assertEqual(post_json_calls[0]['request'],

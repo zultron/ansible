@@ -26,10 +26,8 @@ class TestCAIPAClient(unittest.TestCase, AbstractTestClass):
             module_params = dict(
                 cn = "Test CA",
                 description = "For testing Ansible",
+                ipacasubjectdn = 'CN=Test CA,O=%s' % self.domain.upper(),
                 state = "present",
-                ipa_host = "host1.example.com",
-                ipa_user = "admin",
-                ipa_pass = "secretpass",
             ),
             post_json_calls = [
                 dict(
@@ -41,10 +39,10 @@ class TestCAIPAClient(unittest.TestCase, AbstractTestClass):
                     name = 'add new object',
                     request = {
                         'name' : ['Test CA'],
-                        'item' : {'all': True,
-                                  'setattr': ['description=For testing Ansible'],
-                                  'addattr': [],
-                                  'delattr': []},
+                        'item' : {'description': 'For testing Ansible',
+                                  'ipacasubjectdn': 'CN=Test CA,O=%s' % (
+                                      self.domain.upper()),
+                                  'all': True},
                         'method' : 'ca_add',
                     },
                     reply_updates = {
@@ -62,9 +60,6 @@ class TestCAIPAClient(unittest.TestCase, AbstractTestClass):
                 cn = "Test CA",
                 state = "absent",
                 description = "For testing Ansible",
-                ipa_host = "host1.example.com",
-                ipa_user = "admin",
-                ipa_pass = "secretpass",
             ),
             post_json_calls = [
                 dict(
@@ -75,10 +70,8 @@ class TestCAIPAClient(unittest.TestCase, AbstractTestClass):
                     name = 'absent/modify existing object',
                     request = {
                         'name' : ['Test CA'],
-                        'item' : {'all': True,
-                                  'setattr': [],
-                                  'addattr': [],
-                                  'delattr': ['description=For testing Ansible']},
+                        'item' : {'description': None,
+                                  'all': True},
                         'method' : 'ca_mod',
                     },
                     # recycle reply; not needed
@@ -95,9 +88,6 @@ class TestCAIPAClient(unittest.TestCase, AbstractTestClass):
                 cn = "Test CA",
                 state = "exact",
                 description = "Some Ansible test artifact",
-                ipa_host = "host1.example.com",
-                ipa_user = "admin",
-                ipa_pass = "secretpass",
             ),
             post_json_calls = [
                 dict(
@@ -108,11 +98,8 @@ class TestCAIPAClient(unittest.TestCase, AbstractTestClass):
                     name = 'exact/modify existing object',
                     request = {
                         'name' : ['Test CA'],
-                        'item' : {'all': True,
-                                  'setattr': [
-                                      'description=Some Ansible test artifact'],
-                                  'addattr': [],
-                                  'delattr': []},
+                        'item' : {'description': 'Some Ansible test artifact',
+                                  'all': True},
                         'method' : 'ca_mod',
                     },
                     reply_updates = {
@@ -127,9 +114,6 @@ class TestCAIPAClient(unittest.TestCase, AbstractTestClass):
             module_params = dict(
                 cn = "Test CA",
                 state = "absent",
-                ipa_host = "host1.example.com",
-                ipa_user = "admin",
-                ipa_pass = "secretpass",
             ),
             post_json_calls = [
                 dict(

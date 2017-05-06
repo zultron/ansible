@@ -54,10 +54,10 @@ class TestDNSZoneIPAClient(unittest.TestCase, AbstractTestClass):
                 dict(
                     name = 'add new object',
                     request = {
-                        'item' : {'setattr': (['idnsallowdynupdate=True',
-                                               'idnsallowtransfer=none;' ] +
-                                              ['nsrecord=%s' % r
-                                               for r in self.nsrecord]),
+                        'item' : {'idnsallowtransfer': 'none;',
+                                  'idnsallowdynupdate': True,
+                                  'addattr': ['nsrecord=%s' % r
+                                              for r in self.nsrecord],
                                   'all': True},
                         'method' : 'dnszone_add',
                         'name' : ['test.%s' % self.domain]},
@@ -88,7 +88,7 @@ class TestDNSZoneIPAClient(unittest.TestCase, AbstractTestClass):
                 dict(
                     name = 'modify existing object',
                     request = {
-                        'item' : {'setattr': ['idnsallowdynupdate=False' ],
+                        'item' : {'idnsallowdynupdate': False,
                                   'all': True},
                         'method' : 'dnszone_mod',
                         'name' : ['test.%s' % self.domain]},

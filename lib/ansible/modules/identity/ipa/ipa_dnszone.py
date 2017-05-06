@@ -166,7 +166,7 @@ class DNSZoneIPAClient(IPAClient):
         idnsupdatepolicy = dict(
             type='str', required=False),
         nsrecord = dict(
-            type='str', required=False),
+            type='list', required=False),
     )
 
     # Also:

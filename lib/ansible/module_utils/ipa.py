@@ -380,29 +380,55 @@ class IPAClient(object):
 
         request['item'] = changes
 
-        # Do any last-minute request patching
-        self.request_cleanup(request)
 
         # Record whether request would be a change
         self.changed = self.is_changed(request)
 
+        # Do any last-minute request patching
+        self.request_cleanup(request)
+
+
         return request
 
     def expand_changes(self, request):
-        expanded_changes = {'addattr':[], 'delattr':[], 'setattr':[],
-                            'all':True}
-        for op in request['item']:
-            for attr, val_list in request['item'][op].items():
-                for val in val_list:
-                    expanded_changes[op].append("%s=%s" % (attr, val))
-            expanded_changes[op].sort() # Sort for unit tests
+        item = request['item']
+        for key, val in item.items():
+            # if key == 'setattr' and request['method'] == self._methods['add']:
+            if key == 'setattr':
+                # When adding a new object, move non-list attributes
+                # directly into request['item'] keys, and remove
+                # values from their lists
+                for k, v in item.pop('setattr').items():
+                    item[k] = v[0]
+                continue
+            if key == 'delattr':
+                # Move any non-list attributes in 'delattr' directly
+                # into request['item'] keys with null value
+                for k, v in item['delattr'].items():
+                    if self.param_data[k]['type'] != 'list':
+                        item[k] = None
+                        item['delattr'].pop(k)
+                continue
 
-        # Remove empty lists
-        for key in ('addattr','delattr','setattr'):
-            if len(expanded_changes[key]) == 0:
-                expanded_changes.pop(key)
-
-        request['item'] = expanded_changes
+        # Start over, since keys/vals have changed
+        for key, val in item.items():
+            if key in ('addattr','delattr'):
+                if len(val) == 0:
+                    # Remove any empty lists, which may be
+                    # inapplicable for some object types
+                    # (e.g. 'delattr' for 'ca' objects)
+                    item.pop(key)
+                    continue
+                for k, vs in item.pop(key).items():
+                    # Turn key:[val1,val2,...] dicts into
+                    # ["key=val1","key=val2",...] lists
+                    for v in vs:
+                        item.setdefault(key, []).append("%s=%s" % (k, v))
+                    # Sort list for tests
+                    item[key].sort()
+                continue
+        # Add all=True to get back object with all attributes in reply
+        item['all'] = True
 
     def request_cleanup(self, request):
         # Subclasses may override to patch up request before posting
@@ -414,7 +440,6 @@ class IPAClient(object):
         request = self.compute_changes()
 
         if self.module.check_mode or not self.changed:
-            self.updated_obj = self.found_obj
             return
         
         self.expand_changes(request)
