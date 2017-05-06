@@ -478,30 +478,44 @@ class IPAClient(object):
         pass
 
     def rem(self):
-        if self.module.check_mode: return
+        if self.state != 'absent':
+            # Not removing object; signal to continue
+            return False
 
+        if self.clean(self.module.params, 'mod')['item']:
+            # Parameters in request and state is 'absent'; remove the
+            # parameters, not the whole object; signal to continue
+            return False
+
+        if not self.found_obj:
+            # Object is already absent; signal done
+            return True
+
+        if self.module.check_mode:
+            # In check mode, do nothing; signal done
+            self.changed = True
+            return True
+
+        # Do the actual removal
+        # - Process module parameters
         request = self.clean(self.module.params, 'rem')
+        # - Run any subclass request cleanups
         self.rem_request_cleanup(request)
+        # - Post request
         self.final_obj = self.updated_obj = self._post_json(**request)
+        # - Mark object changed
         self.changed = True
+        # - Signal done
+        return True
 
     def ensure(self):
 
         # Find any existing objects
         self.find()
 
-        if self.state == 'absent':
-            if not self.found_obj:
-                # Object is already absent; do nothing
-                return False, {}
-
-            # If no parameters in request, then 'absent' means to
-            # remove the entire object here
-            if not self.clean(self.module.params, 'mod')['item']:
-                # No keys in request:  remove whole object
-                self.rem()
-                return self.changed, {}
-            # Otherwise, 'absent' means to remove items from list keys
+        if self.rem():
+            # Object is absent or nothing to do
+            return self.changed, self.final_obj
 
         # Effect changes
         self.add_or_mod()
