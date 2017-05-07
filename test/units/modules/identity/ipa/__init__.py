@@ -217,8 +217,9 @@ class AbstractTestClass(object):
                     pprint(client1.found_obj if i==0 \
                            else client1.updated_obj if i==1 \
                            else client1.final_obj)
-                except:
-                    print "(exception raised while printing debug info)"
+                except Exception as e:
+                    print "Exception raised while printing debug info:"
+                    print e
                     break
 
         # Raise any earlier exception
