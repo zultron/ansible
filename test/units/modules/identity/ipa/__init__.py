@@ -198,7 +198,7 @@ class AbstractTestClass(object):
         # Verify run
         #
         print "Number of calls: %d" % client1._post_json.call_count
-        for i in range(3):
+        for i in range(client1._post_json.call_count):
             if client1._post_json.call_count > i:
                 print "*** Call #%d" % i
                 try:
@@ -217,7 +217,9 @@ class AbstractTestClass(object):
                     pprint(client1.found_obj if i==0 \
                            else client1.updated_obj if i==1 \
                            else client1.final_obj)
-                except: pass
+                except:
+                    print "(exception raised while printing debug info)"
+                    break
 
         # Raise any earlier exception
         if raised_exception:  raise

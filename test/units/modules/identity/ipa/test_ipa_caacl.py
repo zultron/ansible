@@ -27,14 +27,11 @@ class TestCAACLIPAClient(unittest.TestCase, AbstractTestClass):
             module_params = dict(
                 cn = "Test ACL",
                 description = "ACL for Ansible testing",
-                user = [ 'user1', 'user2' ],
-                group = [ 'group1' ],
-                certprofile = 'prof1',
-                ca = ['ca1'],
+                user = [ 'admin' ],
+                group = [ 'editors','admins' ],
+                certprofile = 'IECUserRoles',
+                ca = ['ipa'],
                 state = "present",
-                ipa_host = "host1.example.com",
-                ipa_user = "admin",
-                ipa_pass = "secretpass",
             ),
             post_json_calls = [
                 dict(
@@ -45,22 +42,47 @@ class TestCAACLIPAClient(unittest.TestCase, AbstractTestClass):
                 dict(
                     name = 'add new object',
                     request = {
-                        'item': {'addattr': ['ca=ca1',
-                                             'certprofile=prof1',
-                                             'group=group1',
-                                             'user=user1',
-                                             'user=user2'],
-                                 'all': True,
-                                 'delattr': [],
-                                 'setattr': ['description=ACL for Ansible testing']},
+                        'item': {'description': 'ACL for Ansible testing',
+                                 'all': True},
                         'method': 'caacl_add',
                         'name': ['Test ACL']},
                     reply_updates = {
                         "description": [ "ACL for Ansible testing" ],
-                        'ca': ['ca1'],
-                        'certprofile': ['prof1'],
-                        'group': ['group1'],
-                        'user': ['user1', 'user2'],
+                    },
+                ),
+                dict(
+                    name = 'add CA',
+                    request = {
+                        'method': 'caacl_add_ca',
+                        'item': {'ca': ['ipa'],
+                                 'all': True},
+                        'name': ['Test ACL']},
+                    reply_updates = {
+                        'ca': ['ipa'],
+                    },
+                ),
+                dict(
+                    name = 'add certprofile',
+                    request = {
+                        'method': 'caacl_add_profile',
+                        'item': {'certprofile': ['IECUserRoles'],
+                                 'all': True},
+                        'name': ['Test ACL']},
+                    reply_updates = {
+                        'certprofile': ['IECUserRoles'],
+                    },
+                ),
+                dict(
+                    name = 'add user',
+                    request = {
+                        'method': 'caacl_add_user',
+                        'item': {'group': ['admins','editors'],
+                                 'user': ['admin'],
+                                 'all': True},
+                        'name': ['Test ACL']},
+                    reply_updates = {
+                        'group': ['admins','editors'],
+                        'user': ['admin'],
                     },
                 ),
                 # No enable/disable operation
@@ -72,12 +94,9 @@ class TestCAACLIPAClient(unittest.TestCase, AbstractTestClass):
             test_key = 11,
             module_params = dict(
                 cn = "Test ACL",
-                user = [ 'user1', 'user3' ], # One redundant, one new
-                certprofile = ['prof2'], # New
+                group = [ 'ipausers', 'editors' ], # One redundant, one new
+                certprofile = ['caIPAserviceCert'], # New
                 state = "present",
-                ipa_host = "host1.example.com",
-                ipa_user = "admin",
-                ipa_pass = "secretpass",
             ),
             post_json_calls = [
                 dict(
@@ -85,18 +104,25 @@ class TestCAACLIPAClient(unittest.TestCase, AbstractTestClass):
                     request = self.find_request,
                 ),
                 dict(
-                    name = 'modify existing object',
+                    name = 'add certprofile',
                     request = {
-                        'item': {'addattr': ['certprofile=prof2',
-                                             'user=user3'],
-                                 'all': True,
-                                 'delattr': [],
-                                 'setattr': []},
-                        'method': 'caacl_mod',
+                        'method': 'caacl_add_profile',
+                        'item': {'certprofile': ['caIPAserviceCert'],
+                                 'all': True},
                         'name': ['Test ACL']},
                     reply_updates = {
-                        'user': ['user1', 'user3'],
-                        'certprofile': ['prof2'],
+                        'certprofile': ['IECUserRoles','caIPAserviceCert'],
+                    },
+                ),
+                dict(
+                    name = 'add user',
+                    request = {
+                        'method': 'caacl_add_user',
+                        'item': {'group': ['ipausers'],
+                                 'all': True},
+                        'name': ['Test ACL']},
+                    reply_updates = {
+                        'group': ['admins','editors','ipausers'],
                     },
                 ),
                 # No enable/disable operation
@@ -108,13 +134,10 @@ class TestCAACLIPAClient(unittest.TestCase, AbstractTestClass):
             test_key = 12,
             module_params = dict(
                 cn = "Test ACL",
-                user = [ 'user3', 'user4' ], # user3 exists, user4 not
-                group = ['group1'], # exists
-                host = ['host1'], # not
+                group = [ 'admins', 'bogus' ], # admins exists, bogus not
+                user = ['admin'],              # exists
+                host = ['bogushost'],          # not
                 state = "absent",
-                ipa_host = "host1.example.com",
-                ipa_user = "admin",
-                ipa_pass = "secretpass",
             ),
             post_json_calls = [
                 dict(
@@ -122,18 +145,16 @@ class TestCAACLIPAClient(unittest.TestCase, AbstractTestClass):
                     request = self.find_request,
                 ),
                 dict(
-                    name = 'modify existing object',
+                    name = 'remove user/group',
                     request = {
-                        'item': {'addattr': [],
-                                 'all': True,
-                                 'delattr': ['group=group1',
-                                             'user=user3'],
-                                 'setattr': []},
-                        'method': 'caacl_mod',
+                        'method': 'caacl_remove_user',
+                        'item': {'user': ['admin'],
+                                 'group': ['admins'],
+                                 'all': True},
                         'name': ['Test ACL']},
                     reply_updates = {
                         'user': None,
-                        'group': None,
+                        'group': ['editors','ipausers'],
                     },
                 ),
                 # No enable/disable operation
@@ -145,13 +166,8 @@ class TestCAACLIPAClient(unittest.TestCase, AbstractTestClass):
             test_key = 13,
             module_params = dict(
                 cn = "Test ACL",
-                state = "disabled",               # Disabled; present:
-                description = "New description",  # New description
-                host = ['host1.example.com',      # Add
-                        'host2.example.com'],     # Add
-                ipa_host = "host1.example.com",
-                ipa_user = "admin",
-                ipa_pass = "secretpass",
+                state = "disabled",                 # Disabled; present:
+                description = "New description",    # New description
             ),
             post_json_calls = [
                 dict(
@@ -162,17 +178,13 @@ class TestCAACLIPAClient(unittest.TestCase, AbstractTestClass):
                     name = 'modify existing object',
                     request = {
                         'name': ['Test ACL'],
-                        'item': {'addattr': ['host=host1.example.com',
-                                             'host=host2.example.com'],
-                                 'setattr': ['description=New description'],
-                                 'delattr': [], 'all': True,
+                        'item': {'description': 'New description',
+                                 'all': True,
                              },
                         'method': 'caacl_mod',
                     },
                     reply_updates = {
                         'description' : ["New description"],
-                        'host': ['host1.example.com',
-                                 'host2.example.com'],
                         "ipaenabledflag": [ "TRUE" ], 
                     },
                 ),
@@ -195,36 +207,64 @@ class TestCAACLIPAClient(unittest.TestCase, AbstractTestClass):
             test_key = 14,
             module_params = dict(
                 cn = "Test ACL",
-                state = "exact",                  # Exact:
-                description = "New description",  # Same
-                certprofile = 'prof2',            # Same
-                # ca                              # Remove
-                host = [# host1.example.com       # Remove
-                        'host2.example.com',      # Same
-                        'host3.example.com'],     # Add
-                ipa_host = "host1.example.com",
-                ipa_user = "admin",
-                ipa_pass = "secretpass",
+                state = "exact",                    # Exact:
+                description = "New description",    # Same
+                certprofile = 'IECUserRoles',       # Same
+                #             'caIPAserviceCert',   # Remove
+                # ca = 'ipa',                       # Remove
+                group = [
+                    # 'ipausers'                    # Remove
+                    'editors',                      # Same
+                    'trust admins'],                # Add
             ),
             post_json_calls = [
                 dict(
                     name = 'find existing object',
                     request = self.find_request,
                 ),
+                # No modify existing object; desc unchanged
                 dict(
-                    name = 'modify existing object',
+                    name = 'add user/group',
                     request = {
-                        'name': ['Test ACL'],
-                        'item': {'addattr': ['host=host3.example.com'],
-                                 'delattr': ['ca=ca1',
-                                             'host=host1.example.com'],
-                                 'setattr': [], 'all': True},
-                        'method': 'caacl_mod',
-                    },
+                        'method': 'caacl_add_user',
+                        'item': {'group': ['trust admins'],
+                                 'all': True},
+                        'name': ['Test ACL']},
                     reply_updates = {
-                        'host' : ['host2.example.com',
-                                  'host3.example.com'],
-                        'ca' : None,
+                        'group': ['editors','ipausers', 'trust admins'],
+                    },
+                ),
+                dict(
+                    name = 'remove CA',
+                    request = {
+                        'method': 'caacl_remove_ca',
+                        'item': {'ca': ['ipa'],
+                                 'all': True},
+                        'name': ['Test ACL']},
+                    reply_updates = {
+                        'ca': None,
+                    },
+                ),
+                dict(
+                    name = 'remove certprofile',
+                    request = {
+                        'method': 'caacl_remove_profile',
+                        'item': {'certprofile': ['caIPAserviceCert'],
+                                 'all': True},
+                        'name': ['Test ACL']},
+                    reply_updates = {
+                        'certprofile': ['IECUserRoles'],
+                    },
+                ),
+                dict(
+                    name = 'remove user/group',
+                    request = {
+                        'method': 'caacl_remove_user',
+                        'item': {'group': ['ipausers'],
+                                 'all': True},
+                        'name': ['Test ACL']},
+                    reply_updates = {
+                        'group': ['editors','trust admins'],
                     },
                 ),
                 # No enable/disable operation
@@ -237,9 +277,6 @@ class TestCAACLIPAClient(unittest.TestCase, AbstractTestClass):
             module_params = dict(
                 cn = "Test ACL",
                 state = "enabled",                # Enabled, no other changes
-                ipa_host = "host1.example.com",
-                ipa_user = "admin",
-                ipa_pass = "secretpass",
             ),
             post_json_calls = [
                 dict(
@@ -267,9 +304,6 @@ class TestCAACLIPAClient(unittest.TestCase, AbstractTestClass):
             module_params = dict(
                 cn = "Test ACL",
                 state = "absent",
-                ipa_host = "host1.example.com",
-                ipa_user = "admin",
-                ipa_pass = "secretpass",
             ),
             post_json_calls = [
                 dict(

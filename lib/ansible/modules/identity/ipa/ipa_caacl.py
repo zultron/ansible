@@ -150,9 +150,110 @@ class CAACLIPAClient(IPAClient):
             from_result_attr='ipamemberca_ca'),
     )
 
+    def request_cleanup(self, request):
+        # caacl user/host/service/etc. list attributes can't be
+        # manipulated with addattr/delattr, and need separate requests
+        # with separate methods for each
+
+        # Extract and save separate requests for posting later
+        self.request_items = {}
+        # Values in 'addattr' will go to caacl_add_*, and 'delattr' to
+        # caacl_remove_*
+        for from_op, to_op in (('addattr','add'),
+                               ('delattr','remove')):
+            # Methods e.g. caacl_add_host have parameters e.g. user
+            # and group
+            for attr_cat, attrs in (('user',('user','group')),
+                                    ('host',('host','hostgroup')),
+                                    ('profile',('certprofile',)),
+                                    ('ca',('ca',)),
+                                    ('service',('service',))):
+                for attr in attrs:
+                    method = 'caacl_%s_%s' % (to_op, attr_cat)
+                    val = request['item'].get(from_op,{}).pop(attr,[])
+                    if val:
+                        self.request_items.setdefault(method,{})[attr] = (
+                            sorted(val))
+                        self.request_items[method]['all'] = True
+        # Save request name for easy access
+        self.request_name = request['name']
+                    
+    def other_requests(self):
+        # Execute additional requests
+
+        if len(self.request_items.keys()) > 0:
+            self.changed = True
+
+        if self.module.check_mode or not self.changed:
+            return
+
+        self.other_request_objs = []
+        # (Sorted for unit tests)
+        for method in sorted(self.request_items.keys()):
+            request = dict(
+                method = method,
+                item = self.request_items[method],
+                name = self.request_name,
+            )
+            self.final_obj = self._post_json(**request)
+            self.other_request_objs.append(self.final_obj)
 
 def main():
     CAACLIPAClient().main()
 
 if __name__ == '__main__':
     main()
+
+
+# ipa: INFO: Request: {
+#     "id": 0, 
+#     "method": "caacl_remove_user/1", 
+#     "params": [
+#         [
+#             "user_cert_acl"
+#         ], 
+#         {
+#             "all": true, 
+#             "group": [
+#                 "editors"
+#             ], 
+#             "version": "2.213"
+#         }
+#     ]
+# }
+
+
+# ipa: INFO: Request: {
+#     "id": 0,
+#     "method": "caacl_add_user/1",
+#     "params": [
+#         [
+#             "user_cert_acl"
+#         ],  
+#         {
+#             "all": true,
+#             "group": [
+#                 "editors"
+#             ],  
+#             "version": "2.213"
+#         }   
+#     ]   
+# }   
+
+# ipa: INFO: Request: {
+#     "id": 0,  
+#     "method": "caacl_add_profile/1", 
+#     "params": [
+#         [
+#             "user_cert_acl"
+#         ], 
+#         {
+#             "all": true, 
+#             "certprofile": [
+#                 "IECUserRoles"
+#             ], 
+#             "version": "2.213"
+#         }
+#     ]
+# }
+

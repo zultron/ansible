@@ -342,12 +342,10 @@ class IPAClient(object):
             or bool(item.get('delattr',False)) \
             or bool(item.get('setattr',False))
 
-    def compute_changes(self):
-        request = self.clean(self.module.params,
-                             action = 'mod' if self.found_obj else 'add')
+    def compute_changes(self, action):
+        request = self.clean(self.module.params, action=action)
         self.change_params = change_params = request['item']
-        current = self.clean(self.found_obj, curr=True,
-                             action = 'mod' if self.found_obj else 'add')
+        current = self.clean(self.found_obj, curr=True, action=action)
         self.curr_params = curr_params = current['item']
 
         changes = {'addattr':{}, 'delattr':{}, 'setattr':{}}
@@ -381,12 +379,11 @@ class IPAClient(object):
         request['item'] = changes
 
 
-        # Record whether request would be a change
-        self.changed = self.is_changed(request)
-
         # Do any last-minute request patching
         self.request_cleanup(request)
 
+        # Record whether request would be a change
+        self.changed = self.is_changed(request)
 
         return request
 
@@ -437,7 +434,8 @@ class IPAClient(object):
     def add_or_mod(self):
 
         # Compute list of items to modify/add/delete
-        request = self.compute_changes()
+        request = self.compute_changes(
+            action = 'mod' if self.found_obj else 'add')
 
         if self.module.check_mode or not self.changed:
             return
@@ -508,6 +506,10 @@ class IPAClient(object):
         # - Signal done
         return True
 
+    def other_requests(self):
+        # Subclasses may override to add additional requests
+        pass
+
     def ensure(self):
 
         # Find any existing objects
@@ -519,6 +521,7 @@ class IPAClient(object):
 
         # Effect changes
         self.add_or_mod()
+        self.other_requests()
         self.enable_or_disable()
 
         return self.changed, self.final_obj
