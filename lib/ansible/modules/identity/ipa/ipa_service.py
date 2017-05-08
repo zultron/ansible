@@ -117,8 +117,8 @@ class ServiceIPAClient(IPAClient):
         krbcanonicalname = dict(
             type='str', required=True, aliases=['name'],
             when=['find'], when_name=['add', 'mod', 'rem']),
-        certificate = dict(
-            type='str', required=False, from_result_attr='usercertificate'),
+        usercertificate = dict(
+            type='str', required=False),
         krbprincipalauthind = dict(
             type='str', required=False),
 
@@ -177,6 +177,20 @@ class ServiceIPAClient(IPAClient):
     )
 
     def filter_value(self, key, val, dirty, item, action):
+        if key == 'usercertificate':
+            print "usercertificate val is %s" % val
+        if key == 'usercertificate' and action != 'find':
+            new_val = item.setdefault(key, [])
+            for v in val:
+                if isinstance(v,dict) and '__base64__' in v:
+                    # Replace dict values with strings:
+                    # from:  'usercertificate': [{'__base64__': 'MIIC[...]QLnA='}]
+                    #   to:  'usercertificate': ['MIIC[...]QLnA=']
+                    new_val.append(v['__base64__'])
+                else:
+                    new_val.append(v)
+            return True
+
         if key == 'krbprincipalname':
             # krbprincipalname list:  This list of principal aliases
             # always includes the principal canonical name.  Aliases

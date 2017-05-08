@@ -202,6 +202,7 @@ class IPAClient(object):
     def _post_json(self, method, name, item=None, item_filter=None):
         url = '%s/session/json' % self.get_base_url()
         data = {'method': method, 'params': [name, item]}
+        from pprint import pprint; print "data:"; pprint(data)
         try:
             resp, info = fetch_url(
                 module=self.module, url=url,
@@ -224,6 +225,7 @@ class IPAClient(object):
         resp = json.loads(to_text(resp.read(), encoding=charset),
                           encoding=charset)
         err = resp.get('error')
+        from pprint import pprint; print "resp:"; pprint(resp); print "err:"; pprint(err)
         if err is not None:
             self._fail('response %s' % method, err)
 
@@ -345,8 +347,10 @@ class IPAClient(object):
     def compute_changes(self, action):
         request = self.clean(self.module.params, action=action)
         self.change_params = change_params = request['item']
+        from pprint import pprint; print "compute_changes:  change:"; pprint(change_params)
         current = self.clean(self.found_obj, curr=True, action=action)
         self.curr_params = curr_params = current['item']
+        from pprint import pprint; print "compute_changes:  curr:"; pprint(curr_params)
 
         changes = {'addattr':{}, 'delattr':{}, 'setattr':{}}
 
@@ -379,11 +383,15 @@ class IPAClient(object):
         request['item'] = changes
 
 
+        from pprint import pprint; print "compute_changes:  item:"; pprint(request['item'])
         # Do any last-minute request patching
         self.request_cleanup(request)
 
         # Record whether request would be a change
         self.changed = self.is_changed(request)
+
+
+        from pprint import pprint; print "compute_changes:  request:"; pprint(request)
 
         return request
 
@@ -437,10 +445,19 @@ class IPAClient(object):
         request = self.compute_changes(
             action = 'mod' if self.found_obj else 'add')
 
+        print "self.changed = %s; self.module.check_mode = %s" % (self.changed, self.module.check_mode)
+
         if self.module.check_mode or not self.changed:
+            print "Fuck me not here"
             return
         
+
+        print "Ok should be"
+
         self.expand_changes(request)
+
+        from pprint import pprint; print "add_or_mod:  request:"; pprint(request)
+
 
         self.final_obj = self.updated_obj = self._post_json(**request)
 
