@@ -109,6 +109,8 @@ class AbstractTestClass(object):
             set(client.kw_args.keys()),
             set(client.argument_spec.keys()))
 
+        # Verify base_keys is a set
+        self.assertIsInstance(client.base_keys, set)
 
     #################################################################
     # runner()
@@ -185,20 +187,22 @@ class AbstractTestClass(object):
         print "\n*** Module params: ***"
         pprint(client1.module.params)
         print "\n*** Module canonical params, state=%s: ***" % client1.state
-        pprint(client1.canon_params)
+        pprint(getattr(client1,'canon_params',
+                       '   canon_params not initialized'))
         print "\n*** Cleaned response: ***"
         pprint(client1.response_cleaned)
         for i in range(client1._post_json.call_count):
             if client1._post_json.call_count > i:
                 try:
-                    print "\n*** Call #%d:  %s ***" % \
+                    print "\n*** Call #%d:  %s (%s) ***" % \
                         (i,
                          (post_json_calls[i]['name'] if i < len(post_json_calls)
-                          else 'EXTRA CALL'))
+                          else 'EXTRA CALL'),
+                         client1.requests[i]['name'])
                     if i > 1 and \
                        client1._post_json.call_args_list[i][1]['method'] in (
                            client1._methods['add'], client1._methods['mod']):
-                        print "--- Cleaned find reply params:"
+                        print "--- Cleaned find response params:"
                         pprint(client1.curr_params)
                     print "--- Request #%d:" % i
                     pprint(client1._post_json.call_args_list[i][1])
@@ -227,16 +231,20 @@ class AbstractTestClass(object):
         if raised_exception:  raise
 
         # - find() call parameters
-        self.assertEqual(post_json_calls[0]['request'],
-                         client1._post_json.call_args_list[0][1])
+        find_req_expected = post_json_calls[0]['request']
+        find_req_actual = client1._post_json.call_args_list[0][1]
+        self.assertEqual(find_req_expected, find_req_actual)
 
         # - Number of calls to _post_json
-        self.assertEqual(client1._post_json.call_count, len(post_json_calls))
+        post_json_calls_expected = client1._post_json.call_count
+        post_json_calls_actual = len(post_json_calls)
+        self.assertEqual(post_json_calls_expected, post_json_calls_actual)
 
         # - Following call parameters
-        for request, call in \
-            zip(client1._post_json.call_args_list[1:], post_json_calls[1:]):
-            self.assertEqual(call['request'],request[1])
+        for request_actual, request_expected in \
+            zip([l[1] for l in client1._post_json.call_args_list[1:]],
+                [l['request'] for l in post_json_calls[1:]]):
+            self.assertEqual(request_expected,request_actual)
 
         # - Changed
         self.assertTrue(client1.changed)
@@ -272,7 +280,7 @@ class AbstractTestClass(object):
             raised_exception = True
 
         #
-        # Run and verify add_or_mod()
+        # Print a lot of debug data
         #
 
         # Verify ONLY the find call happened (or print debug info & fail)
@@ -280,17 +288,23 @@ class AbstractTestClass(object):
         pprint(client2._post_json.call_args_list[0][1])
         print "--- Expected find() request:"
         pprint(post_json_calls[0]['request'])
-        print "--- Reply:"
+        print "--- Response:"
         pprint(client2.requests[0]['response'])
+        print "--- Response cleaned:"
+        pprint(client2.requests[0]['response_cleaned'])
+        print "--- Cleaned module params:"
+        pprint(client1.canon_params)
+        print "--- Diffs:"
+        pprint(client2.diffs)
         if client2._post_json.call_count > 1:
             try:
-                print "--- Cleaned module params:"
-                pprint(client2.change_params)
-                print "--- Cleaned find reply params:"
-                pprint(client2.curr_params)
                 print "--- Second request:"
-                pprint(client2._post_json.call_args_list[1][1])
+                pprint(client2.requests[1])
             except: pass
+
+        #
+        # Verify
+        #
 
         # Raise any earlier exception
         if raised_exception:  raise

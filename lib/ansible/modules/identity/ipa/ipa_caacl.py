@@ -110,93 +110,102 @@ caacl:
 '''
 
 from ansible.module_utils.pycompat24 import get_exception
-from ansible.module_utils.ipa import IPAClient
+from ansible.module_utils.ipa import EnablableIPAClient
 
-class CAACLIPAClient(IPAClient):
+class CAACLIPAClient(EnablableIPAClient):
     name = 'caacl'
 
+    param_keys = set(('cn',))
+    enablekey = 'ipaenabledflag'
+
+    # Only description may be modified from the base caacl_mod method
+    base_keys = set(['description'])
+
+    # Adding and removing other items from list parameters can't be
+    # done in the base caacl_mod method's addattr/delattr arguments,
+    # as it can in e.g. dnsrecord objects.
+    change_functions = tuple(
+        list(EnablableIPAClient.change_functions) +
+        ['add_remove_list_items'] )
+
     kw_args = dict(
-        # common params
-        cn = dict(
-            type='str', required=True, aliases=['name'], when=['find'],
-            when_name=['add', 'mod', 'rem', 'enabled', 'disabled']),
-        # add/mod params
-        description = dict(
-            type='str', required=False, when=['add', 'mod'],
-            ),
-        ipaenabledflag = dict(
-            type='bool', required=False, enablekey=True),
+        # request key param
+        cn =             dict(type='str',  required=True, aliases=['name']),
+        # add/mod method param
+        description =    dict(type='str',  required=False),
+        # enable/disable method param
+        ipaenabledflag = dict(type='bool', required=False),
         # add/rem list params
-        user = dict(
-            type='list', required=False,
-            from_result_attr='memberuser_user'),
-        group = dict(
-            type='list', required=False,
-            from_result_attr='memberuser_group'),
-        host = dict(
-            type='list', required=False,
-            from_result_attr='memberhost_host'),
-        hostgroup = dict(
-            type='list', required=False,
-            from_result_attr='memberhost_hostgroup'),
-        service = dict(
-            type='list', required=False,
-            from_result_attr='memberservice_service'),
-        certprofile = dict(
-            type='list', required=False,
-            from_result_attr='ipamembercertprofile_certprofile'),
-        ca = dict(
-            type='list', required=False,
-            from_result_attr='ipamemberca_ca'),
+        user =           dict(type='list', required=False),
+        group =          dict(type='list', required=False),
+        host =           dict(type='list', required=False),
+        hostgroup =      dict(type='list', required=False),
+        service =        dict(type='list', required=False),
+        certprofile =    dict(type='list', required=False),
+        ca =             dict(type='list', required=False),
     )
 
-    def request_cleanup(self, request):
+    def munge_response_keys(self, item):
+        # Response keys for list items look like 'memberuser_user' and
+        # 'memberuser_group'; translate to simply 'user' and 'group'
+        for key in item.keys():
+            if key.startswith('memberuser_') or \
+               key.startswith('memberhost_') or \
+               key.startswith('memberservice_') or \
+               key.startswith('ipamembercertprofile_') or \
+               key.startswith('ipamemberca_'):
+                new_key = key.split('_')[1]
+                item[new_key] = item.pop(key)
+        return item
+
+    def munge_response(self, item):
+        item = self.munge_response_keys(item.copy())
+        item = super(EnablableIPAClient, self).munge_response(item)
+        return item
+
+    def add_remove_list_items(self):
         # caacl user/host/service/etc. list attributes can't be
         # manipulated with addattr/delattr, and need separate requests
         # with separate methods for each
 
-        # Extract and save separate requests for posting later
-        self.request_items = {}
         # Values in 'addattr' will go to caacl_add_*, and 'delattr' to
         # caacl_remove_*
-        for from_op, to_op in (('addattr','add'),
-                               ('delattr','remove')):
+        for from_list, method_op in (('list_add','add'),
+                                     ('list_del','remove')):
             # Methods e.g. caacl_add_host have parameters e.g. user
             # and group
-            for attr_cat, attrs in (('user',('user','group')),
+            for method_item, attrs in (('user',('user','group')),
                                     ('host',('host','hostgroup')),
                                     ('profile',('certprofile',)),
                                     ('ca',('ca',)),
                                     ('service',('service',))):
+                # Construct request item
+                item = {}
                 for attr in attrs:
-                    method = 'caacl_%s_%s' % (to_op, attr_cat)
-                    val = request['item'].get(from_op,{}).pop(attr,[])
-                    if val:
-                        self.request_items.setdefault(method,{})[attr] = (
-                            sorted(val))
-                        self.request_items[method]['all'] = True
-        # Save request name for easy access
-        self.request_name = request['name']
-                    
-    def other_requests(self):
-        # Execute additional requests
+                    val = self.diffs[from_list].get(attr,None)
+                    if val is not None:
+                        item[attr] = sorted(val)
 
-        if len(self.request_items.keys()) > 0:
-            self.changed = True
+                # If no changes needed, do nothing
+                if not item:  continue
 
-        if self.module.check_mode or not self.changed:
-            return
+                # Mark object changed
+                self.changed = True
 
-        self.other_request_objs = []
-        # (Sorted for unit tests)
-        for method in sorted(self.request_items.keys()):
-            request = dict(
-                method = method,
-                item = self.request_items[method],
-                name = self.request_name,
-            )
-            self.final_obj = self._post_json(**request)
-            self.other_request_objs.append(self.final_obj)
+                # If in check mode, do nothing
+                if self.module.check_mode:  continue
+
+                # Construct request
+                item['all'] = True
+                request = dict(
+                    method = 'caacl_%s_%s' % (method_op, method_item),
+                    name = self.mod_request_params(),
+                    item = item)
+
+                self.requests.append(dict(
+                    name = '%s_%s' % (method_op, method_item),
+                    request = request ))
+        
 
 def main():
     CAACLIPAClient().main()

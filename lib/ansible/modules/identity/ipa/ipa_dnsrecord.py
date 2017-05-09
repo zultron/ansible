@@ -112,19 +112,14 @@ from ansible.module_utils.ipa import IPAClient
 class DNSRecordIPAClient(IPAClient):
     name = 'dnsrecord'
 
-    methods = dict(
-        add = '{}_add',
-        rem = '{}_del',
-        mod = '{}_mod',
-        find = '{}_find',
-        show = '{}_show',
-        )
+    param_keys = set(('idnsname','zone'))
+
 
     kw_args = dict(
         zone=dict(
-            type='str', required=True, is_key=True),
+            type='str', required=True),
         idnsname = dict(
-            type='str', required=True, aliases=['name'], is_key=True),
+            type='str', required=True, aliases=['name']),
         arecord = dict(
             type='list', required=False),
         aaaarecord = dict(

@@ -134,16 +134,19 @@ from ansible.module_utils.ipa import EnablableIPAClient
 class DNSZoneIPAClient(EnablableIPAClient):
     name = 'dnszone'
 
+    param_keys = set(['idnsname'])
+    enablekey = 'idnszoneactive'
+
     kw_args = dict(
         # common params
         idnsname = dict(
-            type='str', required=True, aliases=['name'], is_key=True),
+            type='str', required=True, aliases=['name']),
         idnssoarname = dict(
             type='str', required=False),
         idnssoamname = dict(
             type='str', required=False),
         idnszoneactive = dict(
-            type='bool', required=False, enablekey=True, when=[]),
+            type='bool', required=False),
         idnssoaserial = dict(
             type='str', required=False),
         idnssoarefresh = dict(

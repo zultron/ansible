@@ -68,6 +68,17 @@ class IPAClient(object):
     # Choices for `state` param
     state_choices = ('present', 'absent', 'exact')
 
+    # List of functions to run to generate change requests
+    change_functions = ('rem', 'add_or_mod')
+
+    # Parameters used as request keys:  must be overridden
+    param_keys = set([])
+
+    # Parameters of interest in base object add/mod requests; default
+    # is to generate from kw_args, stripping out param_keys;
+    # subclasses may explicitly define
+    #base_keys = set([])
+
     # Keyword args:  must be overridden
     # kw_args = dict(
     #     description = dict(
@@ -85,7 +96,7 @@ class IPAClient(object):
         self.init_standard_params()
         self.init_kw_args()
 
-        # Save request info
+        # Init some attributes
         self.requests = []
 
         # Init module object
@@ -119,20 +130,20 @@ class IPAClient(object):
 
     def init_kw_args(self):
         self.param_data = {}
-        self.param_key_map = {}
         for name, spec_orig in self.kw_args.items():
             spec = spec_orig.copy()
             self.param_data[name] = dict(
                 type = spec['type'],
                 when = spec.pop('when', ['add','mod']),
-                is_key = spec.pop('is_key', False),
-                req_key = spec.pop('req_key', None),
                 value_filter_func = spec.pop('value_filter_func', None),
                 value_filter_re = (re.compile(spec.pop('value_filter_re')) \
                                    if 'value_filter_re' in spec else None),
             )
             self.argument_spec[name] = spec
-            self.param_key_map[spec.pop('from_result_attr', name)] = name
+        if not hasattr(self, 'base_keys'):
+            self.base_keys = set([
+                k for k in self.param_data
+                if k not in self.param_keys])
                 
     def param(self, name, default=None):
         return self.module.params.get(name, default)
@@ -241,23 +252,20 @@ class IPAClient(object):
 
     @property
     def response_cleaned(self):
-        return self.requests[0]['response_cleaned']
+        return self.requests[0].get('response_cleaned',None)
 
     #########
     # munging responses
 
-    def mod_munge_object_keys(self, item):
-        item = item.copy()
+    def munge_pop_request_keys(self, item):
+        # Remove params that are request keys
         for k in item.keys():
-            # Ignore params that are object keys
-            if self.param_data[k]['is_key']:  item.pop(k)
+            if k in self.param_keys:  item.pop(k)
         return item
 
     def clean(self, dirty):
         item = {}
         for key, val in dirty.items():
-            # Simple key translation
-            key = self.param_key_map.get(key, key)
             # Ignore params that are not object attributes ('dn', 'ipa_host')
             if key not in self.param_data:  continue
             if self.param_data[key]['type'] == 'list':
@@ -290,11 +298,6 @@ class IPAClient(object):
                 item.pop(key)
         return item
 
-    def munge_response(self, response):
-        item = self.clean(response)
-        item = self.mod_munge_object_keys(item)
-        return item
-
     #######################################################
     # diffs
 
@@ -317,7 +320,7 @@ class IPAClient(object):
             # FIXME
             # if 'add' not in self.param_data[key]['when']: continue
             # => res_val = a[key] <op> b[key]
-            res_val = list(getattr(set(a.get(key, [])), op)(b.get(key, [])))
+            res_val = list(getattr(set(a.get(key, [])), op)(set(b.get(key, []))))
             if res_val: res.setdefault(key,[]).extend(res_val)
         return res
 
@@ -365,17 +368,13 @@ class IPAClient(object):
     #######################################################
     # find
 
-    # Tuple of keys to use in API <obj>_find request item
-    # Subclasses must override
-    find_keys = tuple()
-
     #########
     # module params
 
     def munge_module_params(self):
         item = self.clean(self.module.params)
         item = self.filter_params_on_when(item, 'mod')
-        item = self.mod_munge_object_keys(item)
+        item = self.munge_pop_request_keys(item)
         return item
 
     #########
@@ -386,10 +385,17 @@ class IPAClient(object):
 
     def find_request_item(self):
         item = {'all': True}
-        for k in self.module.params:
-            if k not in self.param_data: continue
-            if self.param_data[k]['is_key']:
+        for k in self.param_keys:
+            if k in self.module.params:
                 item[k] = self.module.params[k]
+        return item
+
+    #########
+    # response
+
+    def munge_response(self, response):
+        item = self.clean(response)
+        item = self.munge_pop_request_keys(item)
         return item
 
     #########
@@ -400,21 +406,19 @@ class IPAClient(object):
         entry = {'name' : 'find'}
         self.requests.append(entry)
 
-        # Build request dict
+        # Clean module params
+        self.canon_params = self.munge_module_params()
+
+        # Build and post request
         request = entry['request'] = dict(
             method = self._methods['find'],
             name = self.find_request_params(),
             item = self.find_request_item(),
         )
-
-        # Post API find request
         response = entry['response'] = self._post_json(**request)
 
         # Clean results
         entry['response_cleaned'] = (self.munge_response(response.copy()))
-
-        # Clean module params
-        self.canon_params = self.munge_module_params()
 
         # Make object diff
         self.diffs = self.compute_changes(
@@ -427,7 +431,7 @@ class IPAClient(object):
         name = []
         for k in self.module.params:
             if k not in self.param_data: continue
-            if self.param_data[k]['is_key']:
+            if k in self.param_keys:
                 name.append( self.module.params[k] )
         return name
 
@@ -455,23 +459,21 @@ class IPAClient(object):
         # Compute list of items to modify/add/delete
         item = {}
         for k, v in self.diffs['list_add'].items():
-            if 'mod' in self.param_data[k]['when']:
+            if k in self.base_keys:
                 item.setdefault('addattr',{})[k] = v
         for k, v in self.diffs['list_del'].items():
-            if 'mod' in self.param_data[k]['when']:
+            if k in self.base_keys:
                 item.setdefault('delattr',{})[k] = v
         for k, v in self.diffs['scalars'].items():
-            if 'mod' in self.param_data[k]['when']:
+            if k in self.base_keys:
                 item[k] = v
 
-        # Mark object changed if there are any changes
-        if item:  self.changed = True
 
-        # Do nothing if not changed or in check mode
-        if self.module.check_mode or not self.changed:
-            return
-        
+        # Do nothing if no changes in item
+        if not item:  return
+
         # Construct request and queue it up
+        item['all'] = True
         request = dict(
             method = (self._methods['add'] if self.is_absent \
                       else self._methods['mod']),
@@ -479,7 +481,7 @@ class IPAClient(object):
             item = item)
         self.mod_rewrite_list_changes(request)
 
-        self.requests.append(dict( request = request ))
+        self.requests.append(dict( name = 'add_or_mod', request = request ))
 
     #######################################################
     # remove object
@@ -502,9 +504,6 @@ class IPAClient(object):
             # Object is already absent; signal done
             return True
 
-        # Object is to be deleted; mark object as changed
-        self.changed = True
-
         if self.module.check_mode:
             # In check mode, do nothing; signal done
             return True
@@ -519,13 +518,11 @@ class IPAClient(object):
         self.rem_request_cleanup(request)
 
         # Queue request and signal done
-        self.requests.append(dict( request = request ))
+        self.requests.append(dict( name = 'rem', request = request ))
         return True
 
     #######################################################
     # main functions
-
-    change_functions = ('rem', 'add_or_mod')
 
     def queue_requests(self):
         for func_name in self.change_functions:
@@ -538,7 +535,11 @@ class IPAClient(object):
         # Process queue, except for initial find() request
         for entry in self.requests[1:]:
             request = entry['request']
-            entry['response'] = self._post_json(**request)
+            if self.module.check_mode:
+                entry['response'] = {}
+            else:
+                entry['response'] = self._post_json(**request)
+            self.changed = True
 
     def ensure(self):
 
@@ -582,16 +583,19 @@ class EnablableIPAClient(IPAClient):
 
     change_functions = ('rem', 'add_or_mod', 'enable_or_disable')
 
-    def init_kw_args(self):
-        super(EnablableIPAClient, self).init_kw_args()
-
-        self.enablekey = None
-        for name in self.kw_args:
-            if self.argument_spec[name].pop('enablekey',False):
-                self.enablekey = name
+    # Subclasses must override
+    enablekey = None
 
     #######################################################
     # enable/disable methods
+
+    def init_kw_args(self):
+        super(EnablableIPAClient, self).init_kw_args()
+
+        # For subclasses where self.base_keys is not supplied,
+        # remove enablekey from generated set of parameters
+        if not hasattr(self.__class__, 'base_keys'):
+            self.base_keys.discard(self.enablekey)
 
     @property
     def is_enabled(self):
@@ -616,11 +620,9 @@ class EnablableIPAClient(IPAClient):
             return
 
         # Do nothing if object is being created (enabled by default)
-        if self.is_absent:
+        # or not in enable/disable state
+        if self.is_absent or self.state not in ('enabled','disabled'):
             return
-
-        # Mark task as changed
-        self.changed = True
 
         # Do nothing in check mode
         if self.module.check_mode:
@@ -634,5 +636,6 @@ class EnablableIPAClient(IPAClient):
             name = self.mod_request_params(),
             item = {})
 
-        self.requests.append(dict( request = request ))
+        self.requests.append(dict(name = 'enable_or_disable',
+                                  request = request ))
 

@@ -16,7 +16,7 @@ class TestCAACLIPAClient(unittest.TestCase, AbstractTestClass):
 
     find_request = dict(
         method='caacl_find',
-        name=[None],
+        name=[],
         item=dict(all = True,
                   cn = 'Test ACL' ),
     )
@@ -51,14 +51,16 @@ class TestCAACLIPAClient(unittest.TestCase, AbstractTestClass):
                     },
                 ),
                 dict(
-                    name = 'add CA',
+                    name = 'add user',
                     request = {
-                        'method': 'caacl_add_ca',
-                        'item': {'ca': ['ipa'],
+                        'method': 'caacl_add_user',
+                        'item': {'group': ['admins','editors'],
+                                 'user': ['admin'],
                                  'all': True},
                         'name': ['Test ACL']},
                     reply_updates = {
-                        'ca': ['ipa'],
+                        'group': ['admins','editors'],
+                        'user': ['admin'],
                     },
                 ),
                 dict(
@@ -73,16 +75,14 @@ class TestCAACLIPAClient(unittest.TestCase, AbstractTestClass):
                     },
                 ),
                 dict(
-                    name = 'add user',
+                    name = 'add CA',
                     request = {
-                        'method': 'caacl_add_user',
-                        'item': {'group': ['admins','editors'],
-                                 'user': ['admin'],
+                        'method': 'caacl_add_ca',
+                        'item': {'ca': ['ipa'],
                                  'all': True},
                         'name': ['Test ACL']},
                     reply_updates = {
-                        'group': ['admins','editors'],
-                        'user': ['admin'],
+                        'ca': ['ipa'],
                     },
                 ),
                 # No enable/disable operation
@@ -104,17 +104,6 @@ class TestCAACLIPAClient(unittest.TestCase, AbstractTestClass):
                     request = self.find_request,
                 ),
                 dict(
-                    name = 'add certprofile',
-                    request = {
-                        'method': 'caacl_add_profile',
-                        'item': {'certprofile': ['caIPAserviceCert'],
-                                 'all': True},
-                        'name': ['Test ACL']},
-                    reply_updates = {
-                        'certprofile': ['IECUserRoles','caIPAserviceCert'],
-                    },
-                ),
-                dict(
                     name = 'add user',
                     request = {
                         'method': 'caacl_add_user',
@@ -123,6 +112,17 @@ class TestCAACLIPAClient(unittest.TestCase, AbstractTestClass):
                         'name': ['Test ACL']},
                     reply_updates = {
                         'group': ['admins','editors','ipausers'],
+                    },
+                ),
+                dict(
+                    name = 'add certprofile',
+                    request = {
+                        'method': 'caacl_add_profile',
+                        'item': {'certprofile': ['caIPAserviceCert'],
+                                 'all': True},
+                        'name': ['Test ACL']},
+                    reply_updates = {
+                        'certprofile': ['IECUserRoles','caIPAserviceCert'],
                     },
                 ),
                 # No enable/disable operation
@@ -235,14 +235,14 @@ class TestCAACLIPAClient(unittest.TestCase, AbstractTestClass):
                     },
                 ),
                 dict(
-                    name = 'remove CA',
+                    name = 'remove user/group',
                     request = {
-                        'method': 'caacl_remove_ca',
-                        'item': {'ca': ['ipa'],
+                        'method': 'caacl_remove_user',
+                        'item': {'group': ['ipausers'],
                                  'all': True},
                         'name': ['Test ACL']},
                     reply_updates = {
-                        'ca': None,
+                        'group': ['editors','trust admins'],
                     },
                 ),
                 dict(
@@ -257,14 +257,14 @@ class TestCAACLIPAClient(unittest.TestCase, AbstractTestClass):
                     },
                 ),
                 dict(
-                    name = 'remove user/group',
+                    name = 'remove CA',
                     request = {
-                        'method': 'caacl_remove_user',
-                        'item': {'group': ['ipausers'],
+                        'method': 'caacl_remove_ca',
+                        'item': {'ca': ['ipa'],
                                  'all': True},
                         'name': ['Test ACL']},
                     reply_updates = {
-                        'group': ['editors','trust admins'],
+                        'ca': None,
                     },
                 ),
                 # No enable/disable operation
