@@ -52,9 +52,6 @@ class IPAClient(object):
 
     # Parameters for finding existing objects:  must be overridden
     #
-    # - additional args to add to search
-    # extra_find_args = dict(exactly=True)
-    extra_find_args = dict()
     # - for list results, a function to select relevant results
     # find_filter = lambda x: [...]
     find_filter = None
@@ -66,10 +63,10 @@ class IPAClient(object):
         rem = '{}_del',
         mod = '{}_mod',
         find = '{}_find',
-        show = '{}_show',
-        enabled = '{}_enable',
-        disabled = '{}_disable',
         )
+
+    # Choices for `state` param
+    state_choices = ('present', 'absent', 'exact')
 
     # Keyword args:  must be overridden
     # kw_args = dict(
@@ -79,11 +76,17 @@ class IPAClient(object):
     kw_args = dict()
 
 
+    #######################################################
+    # init
+
     def __init__(self):
         # Process module parameters
         self.init_methods()
         self.init_standard_params()
         self.init_kw_args()
+
+        # Save request info
+        self.requests = []
 
         # Init module object
         self.init_module()
@@ -97,10 +100,7 @@ class IPAClient(object):
         self.argument_spec = dict(
             state=dict(
                 type='str', required=False, default='present',
-                choices=(['present', 'absent']
-                         + (['exact'] if 'mod' in self._methods else [])
-                         + (['enabled', 'disabled'] if 'enable' in self._methods
-                            else []))),
+                choices=self.state_choices),
             ipa_prot=dict(
                 type='str', required=False, default='https',
                 choices=['http', 'https']),
@@ -120,27 +120,17 @@ class IPAClient(object):
     def init_kw_args(self):
         self.param_data = {}
         self.param_key_map = {}
-        self._name_map = {}
-        self.enablekey = None
         for name, spec_orig in self.kw_args.items():
             spec = spec_orig.copy()
             self.param_data[name] = dict(
                 type = spec['type'],
                 when = spec.pop('when', ['add','mod']),
-                when_name = spec.pop('when_name', []),
+                is_key = spec.pop('is_key', False),
                 req_key = spec.pop('req_key', None),
                 value_filter_func = spec.pop('value_filter_func', None),
                 value_filter_re = (re.compile(spec.pop('value_filter_re')) \
                                    if 'value_filter_re' in spec else None),
             )
-            for k in spec_orig.get('when_name',[]):
-                name_map = self._name_map.setdefault(k,[None,{}])
-                if 'req_key' in spec_orig:
-                    name_map[1][name] = spec_orig['req_key']
-                else:
-                    name_map[0] = name
-            if spec.pop('enablekey',False):
-                self.enablekey = name
             self.argument_spec[name] = spec
             self.param_key_map[spec.pop('from_result_attr', name)] = name
                 
@@ -162,6 +152,9 @@ class IPAClient(object):
         self.state = self.param('state')
         self.changed = False
 
+
+    #######################################################
+    # post API request
 
     def get_base_url(self):
         return '%s://%s/ipa' % (self.protocol, self.host)
@@ -240,87 +233,79 @@ class IPAClient(object):
             return result
         return None
 
-    def name_map(self, action, i):
-        return self._name_map.get(action, [None,{}])[i]
+    #######################################################
+    # multi-method
 
-    def apply_value_re(self, key, val):
-        filter_re = self.param_data[key]['value_filter_re']
-        res = []
-        for v in val:
-            m = filter_re.match(val)
-            if m is None:  continue
-            res.append(m.group(1))
-        return res
+    #########
+    # accessors
 
-    def filter_value(self, key, val, dirty, item, action):
-        # Subclasses may override this; return True when item was processed
-        return False
+    @property
+    def response_cleaned(self):
+        return self.requests[0]['response_cleaned']
 
-    def clean(self, dirty, action='add', curr=False):
+    #########
+    # munging responses
+
+    def mod_munge_object_keys(self, item):
+        item = item.copy()
+        for k in item.keys():
+            # Ignore params that are object keys
+            if self.param_data[k]['is_key']:  item.pop(k)
+        return item
+
+    def clean(self, dirty):
         item = {}
-        name = [None, {}]
         for key, val in dirty.items():
-            if not curr:
-                # Special handling for request 'name' args
-                if key == self.name_map(action,0): # Positional arg
-                    name[0] = val
-                    continue
-                if key in self.name_map(action,1): # Keyword arg
-                    name[1][self.name_map(action,1)[key]] = val
-                    continue
-            # Translate attr keys from current to change object
-            if curr:  key = self.param_key_map.get(key, key)
-            # All attributes in lists in find results, even scalars
-            if action != 'find' and not isinstance(val, list):  val = [val]
-            # Hook for special processing
-            if self.filter_value(key, val, dirty, item, action):  continue
-            # Ignore params not central to object definition ('dn', 'ipa_host')
+            # Simple key translation
+            key = self.param_key_map.get(key, key)
+            # Ignore params that are not object attributes ('dn', 'ipa_host')
             if key not in self.param_data:  continue
-            # Ignore params irrelevant to this action
-            if action not in self.param_data[key]['when']:  continue
-            # Handle enable flag attr
-            if key == self.enablekey:
-                if action in ('enable','disable'):
-                    item['enabled'] = val[0]
-                else:  continue # Skip it
-            # Munge current attr values into change-compatible values
-            if curr and self.param_data[key]['value_filter_re'] is not None:
-                val = self.apply_value_re(key, val)
-            # Ignore empty values
-            if val==[] or val[0] is None:  continue
-            # Convert 'TRUE' and 'FALSE' to booleans
+            if self.param_data[key]['type'] == 'list':
+                # Ensure list attributes are actually in lists (list
+                # module params may be specified as strings)
+                if not isinstance(val, list):
+                    val = [val]
+                # Ignore empty values
+                if val==[] or val[0] is None:  continue
+            if self.param_data[key]['type'] != 'list':
+                # Ensure non-list attributes are not in lists (API
+                # replies wrap scalars in lists)
+                if isinstance(val, list):
+                    val = val[0]
+                # Ignore empty values
+                if val is None: continue
+            # Convert 'TRUE' and 'FALSE' strings to booleans
             if self.param_data[key]['type'] == 'bool' \
-               and isinstance(val[0], basestring):
-                if val[0].lower() == 'true': val[0] = True
-                elif val[0].lower() == 'false': val[0] = False
-            if self.param_data[key]['req_key'] is not None:
-                # Add key:{__req_key__:val} to item
-                item[key] = { self.param_data[key]['req_key']:val }
+               and isinstance(val, basestring):
+                if val.lower() == 'true': val = True
+                elif val.lower() == 'false': val = False
+            # Add key:val to item
+            item[key] = val
+        return item
+
+    def filter_params_on_when(self, item, when):
+        item = item.copy()
+        for key in item.keys():
+            if when not in self.param_data.get(key,{}).get('when',[]):
+                item.pop(key)
+        return item
+
+    def munge_response(self, response):
+        item = self.clean(response)
+        item = self.mod_munge_object_keys(item)
+        return item
+
+    #######################################################
+    # diffs
+
+    def get_slice(self, params):
+        res = {'list':{}, 'scalar':{}}
+        for key in params:
+            if self.param_data[key]['type'] == 'list':
+                res['list'][key] = params[key]
             else:
-                # Add key:val to item
-                item[key] = val
-        # Most API requests don't need kw args
-        if not name[1]: name.pop(1)
-        return dict(
-            item=item,
-            name=name,
-            method=self._methods[action],
-        )
-
-    def find_request_cleanup(self, request):
-        # Classes may override to munge request
-        pass
-
-    def find(self):
-        request = self.clean(self.module.params, 'find')
-        request['item'].update(dict(all=True))
-        request['item'].update(self.extra_find_args)
-
-        # Do any last-minute request patching
-        self.find_request_cleanup(request)
-
-        self.final_obj = self.updated_obj = self.found_obj = \
-                         self._post_json(**request)
+                res['scalar'][key] = params[key]
+        return res
 
     def op(self, a, b, op):
         keys = set(self.param_data.keys())
@@ -336,94 +321,121 @@ class IPAClient(object):
             if res_val: res.setdefault(key,[]).extend(res_val)
         return res
 
-    def is_changed(self, request):
-        # Compute whether request would cause a change; subclasses may
-        # override
-        item = request['item']
-        return bool(item.get('addattr',False)) \
-            or bool(item.get('delattr',False)) \
-            or bool(item.get('setattr',False))
+    def compute_changes(self, change_params, curr_params):
 
-    def compute_changes(self, action):
-        request = self.clean(self.module.params, action=action)
-        self.change_params = change_params = request['item']
-        from pprint import pprint; print "compute_changes:  change:"; pprint(change_params)
-        current = self.clean(self.found_obj, curr=True, action=action)
-        self.curr_params = curr_params = current['item']
-        from pprint import pprint; print "compute_changes:  curr:"; pprint(curr_params)
+        change_slice = self.get_slice(change_params)
+        curr_slice = self.get_slice(curr_params)
 
-        changes = {'addattr':{}, 'delattr':{}, 'setattr':{}}
-
-        # Compute changes for list parameters
-        if self.state in ('exact', 'present', 'enabled', 'disabled'):
-            changes['addattr'].update(
-                self.op(change_params, curr_params, 'difference'))
+        changes = dict(scalars = {}, list_add = {}, list_del = {})
+        if self.state != 'absent':
+            changes['list_add'].update(
+                self.op(change_slice['list'], curr_slice['list'], 'difference'))
         if self.state == 'exact':
-            changes['delattr'].update(
-                self.op(curr_params, change_params, 'difference'))
+            changes['list_del'].update(
+                self.op(curr_slice['list'], change_slice['list'], 'difference'))
         if self.state == 'absent':
-            changes['delattr'].update(
-                self.op(change_params, curr_params, 'intersection'))
+            changes['list_del'].update(
+                self.op(change_slice['list'], curr_slice['list'], 'intersection'))
 
         # Compute changes for scalar parameters
-        for key in changes['addattr'].keys():
-            # Find only non-list keys
-            if self.param_data[key]['type'] == 'list':  continue
-            # Sanity check:  exactly one entry in add list
-            if len(changes['addattr'][key]) != 1:
-                self._fail(key, 'Found multiple entries of non-list attribute')
-            # Sanity check:  no more than one entry in del list
-            if len(changes['delattr'].get(key,[])) > 1:
-                self._fail(key, 'Found multiple entries of non-list attribute')
-            # Pop key from del list
-            changes['delattr'].pop(key,None)
-            # Move key from add list to set list
-            changes['setattr'][key] = changes['addattr'].pop(key)
+        scalar_keys = set()
+        if self.state != 'absent':
+            # New scalar keys
+            scalar_keys |= (set(change_slice['scalar'].keys()) -
+                            set(curr_slice['scalar'].keys()))
+            # Changed scalar keys
+            scalar_keys |= set(
+                [ k for k in (set(change_slice['scalar'].keys()) &
+                              set(curr_slice['scalar'].keys()))
+                  if change_params[k] != curr_params[k]])
+            if self.state == 'exact':
+                # Deleted scalar keys
+                scalar_keys |= (set(curr_slice['scalar'].keys()) -
+                                set(change_slice['scalar'].keys()))
+            for k in scalar_keys:
+                changes['scalars'][k] = change_params.get(k,None)
+        if self.state == 'absent':
+            for k in change_slice['scalar']:
+                if change_slice['scalar'][k] == \
+                   curr_slice['scalar'].get(k,None):
+                    changes['scalars'][k] = change_slice[k]
 
-        request['item'] = changes
+        return changes
 
+    #######################################################
+    # find
 
-        from pprint import pprint; print "compute_changes:  item:"; pprint(request['item'])
-        # Do any last-minute request patching
-        self.request_cleanup(request)
+    # Tuple of keys to use in API <obj>_find request item
+    # Subclasses must override
+    find_keys = tuple()
 
-        # Record whether request would be a change
-        self.changed = self.is_changed(request)
+    #########
+    # module params
 
+    def munge_module_params(self):
+        item = self.clean(self.module.params)
+        item = self.filter_params_on_when(item, 'mod')
+        item = self.mod_munge_object_keys(item)
+        return item
 
-        from pprint import pprint; print "compute_changes:  request:"; pprint(request)
+    #########
+    # request
 
-        return request
+    def find_request_params(self):
+        return []
 
-    def expand_changes(self, request):
+    def find_request_item(self):
+        item = {'all': True}
+        for k in self.module.params:
+            if k not in self.param_data: continue
+            if self.param_data[k]['is_key']:
+                item[k] = self.module.params[k]
+        return item
+
+    #########
+    # find
+
+    def find(self):
+        # Store data about the find request and diff computation
+        entry = {'name' : 'find'}
+        self.requests.append(entry)
+
+        # Build request dict
+        request = entry['request'] = dict(
+            method = self._methods['find'],
+            name = self.find_request_params(),
+            item = self.find_request_item(),
+        )
+
+        # Post API find request
+        response = entry['response'] = self._post_json(**request)
+
+        # Clean results
+        entry['response_cleaned'] = (self.munge_response(response.copy()))
+
+        # Clean module params
+        self.canon_params = self.munge_module_params()
+
+        # Make object diff
+        self.diffs = self.compute_changes(
+            self.canon_params, self.response_cleaned)
+
+    #######################################################
+    # add/modify base params
+
+    def mod_request_params(self):
+        name = []
+        for k in self.module.params:
+            if k not in self.param_data: continue
+            if self.param_data[k]['is_key']:
+                name.append( self.module.params[k] )
+        return name
+
+    def mod_rewrite_list_changes(self, request):
         item = request['item']
-        for key, val in item.items():
-            # if key == 'setattr' and request['method'] == self._methods['add']:
-            if key == 'setattr':
-                # When adding a new object, move non-list attributes
-                # directly into request['item'] keys, and remove
-                # values from their lists
-                for k, v in item.pop('setattr').items():
-                    item[k] = v[0]
-                continue
-            if key == 'delattr':
-                # Move any non-list attributes in 'delattr' directly
-                # into request['item'] keys with null value
-                for k, v in item['delattr'].items():
-                    if self.param_data[k]['type'] != 'list':
-                        item[k] = None
-                        item['delattr'].pop(k)
-                continue
 
-        # Start over, since keys/vals have changed
         for key, val in item.items():
             if key in ('addattr','delattr'):
-                if len(val) == 0:
-                    # Remove any empty lists, which may be
-                    # inapplicable for some object types
-                    # (e.g. 'delattr' for 'ca' objects)
-                    item.pop(key)
-                    continue
                 for k, vs in item.pop(key).items():
                     # Turn key:[val1,val2,...] dicts into
                     # ["key=val1","key=val2",...] lists
@@ -435,58 +447,42 @@ class IPAClient(object):
         # Add all=True to get back object with all attributes in reply
         item['all'] = True
 
-    def request_cleanup(self, request):
-        # Subclasses may override to patch up request before posting
-        pass
+    @property
+    def is_absent(self):
+        return not bool(self.response_cleaned)
 
     def add_or_mod(self):
-
         # Compute list of items to modify/add/delete
-        request = self.compute_changes(
-            action = 'mod' if self.found_obj else 'add')
+        item = {}
+        for k, v in self.diffs['list_add'].items():
+            if 'mod' in self.param_data[k]['when']:
+                item.setdefault('addattr',{})[k] = v
+        for k, v in self.diffs['list_del'].items():
+            if 'mod' in self.param_data[k]['when']:
+                item.setdefault('delattr',{})[k] = v
+        for k, v in self.diffs['scalars'].items():
+            if 'mod' in self.param_data[k]['when']:
+                item[k] = v
 
-        print "self.changed = %s; self.module.check_mode = %s" % (self.changed, self.module.check_mode)
+        # Mark object changed if there are any changes
+        if item:  self.changed = True
 
+        # Do nothing if not changed or in check mode
         if self.module.check_mode or not self.changed:
-            print "Fuck me not here"
             return
         
+        # Construct request and queue it up
+        request = dict(
+            method = (self._methods['add'] if self.is_absent \
+                      else self._methods['mod']),
+            name = self.mod_request_params(),
+            item = item)
+        self.mod_rewrite_list_changes(request)
 
-        print "Ok should be"
+        self.requests.append(dict( request = request ))
 
-        self.expand_changes(request)
-
-        from pprint import pprint; print "add_or_mod:  request:"; pprint(request)
-
-
-        self.final_obj = self.updated_obj = self._post_json(**request)
-
-    @property
-    def is_enabled(self):
-        val = self.updated_obj.get(self.enablekey,[False])[0]
-        if isinstance(val, basestring):
-            if val.lower() == 'true': return True
-            if val.lower() == 'false': return False
-        return val
-
-    def enable_or_disable(self):
-        # Do nothing if state is present/exact/absent
-        if self.state not in ('disabled','enabled'):  return
-
-        # Do nothing if state is already correct
-        if (self.state == 'enabled' and self.is_enabled) \
-           or (self.state == 'disabled' and not self.is_enabled):
-            return
-
-        # Mark task as changed
-        self.changed = True
-
-        # Do nothing in check mode
-        if self.module.check_mode: return
-
-        # Effect requested state
-        request = self.clean(self.module.params, action=self.state)
-        self.final_obj = self._post_json(**request)
+    #######################################################
+    # remove object
         
     def rem_request_cleanup(self, request):
         # Classes may override to munge request
@@ -497,51 +493,66 @@ class IPAClient(object):
             # Not removing object; signal to continue
             return False
 
-        if self.clean(self.module.params, 'mod')['item']:
-            # Parameters in request and state is 'absent'; remove the
-            # parameters, not the whole object; signal to continue
+        if self.canon_params:
+            # Module params contain object params; 'absent' means
+            # absent attributes, not absent object
             return False
 
-        if not self.found_obj:
+        if self.is_absent:
             # Object is already absent; signal done
             return True
 
+        # Object is to be deleted; mark object as changed
+        self.changed = True
+
         if self.module.check_mode:
             # In check mode, do nothing; signal done
-            self.changed = True
             return True
 
-        # Do the actual removal
-        # - Process module parameters
-        request = self.clean(self.module.params, 'rem')
-        # - Run any subclass request cleanups
+        # Generate remove request
+        request = dict(
+            method = self._methods['rem'],
+            name = self.mod_request_params(),
+            item = {})
+
+        # Run any subclass request cleanups
         self.rem_request_cleanup(request)
-        # - Post request
-        self.final_obj = self.updated_obj = self._post_json(**request)
-        # - Mark object changed
-        self.changed = True
-        # - Signal done
+
+        # Queue request and signal done
+        self.requests.append(dict( request = request ))
         return True
 
-    def other_requests(self):
-        # Subclasses may override to add additional requests
-        pass
+    #######################################################
+    # main functions
+
+    change_functions = ('rem', 'add_or_mod')
+
+    def queue_requests(self):
+        for func_name in self.change_functions:
+            func = getattr(self, func_name)
+            # Let function queue up any request; if it returns True,
+            # then stop and don't enqueue any more requests
+            if func():  break
+
+    def process_queue(self):
+        # Process queue, except for initial find() request
+        for entry in self.requests[1:]:
+            request = entry['request']
+            entry['response'] = self._post_json(**request)
 
     def ensure(self):
 
-        # Find any existing objects
+        # Find existing objects and compute diff
         self.find()
 
-        if self.rem():
-            # Object is absent or nothing to do
-            return self.changed, self.final_obj
+        # Queue up requests
+        self.queue_requests()
 
         # Effect changes
-        self.add_or_mod()
-        self.other_requests()
-        self.enable_or_disable()
+        self.process_queue()
 
-        return self.changed, self.final_obj
+        # Return results
+        return self.changed, self.requests[-1]['response']
 
     def main(self):
 
@@ -556,4 +567,72 @@ class IPAClient(object):
         except Exception:
             e = get_exception()
             self.module.fail_json(msg=str(e))
+
+class EnablableIPAClient(IPAClient):
+    methods = dict(
+        add = '{}_add',
+        rem = '{}_del',
+        mod = '{}_mod',
+        find = '{}_find',
+        enabled = '{}_enable',
+        disabled = '{}_disable',
+        )
+
+    state_choices = ('present', 'absent', 'exact', 'enabled', 'disabled')
+
+    change_functions = ('rem', 'add_or_mod', 'enable_or_disable')
+
+    def init_kw_args(self):
+        super(EnablableIPAClient, self).init_kw_args()
+
+        self.enablekey = None
+        for name in self.kw_args:
+            if self.argument_spec[name].pop('enablekey',False):
+                self.enablekey = name
+
+    #######################################################
+    # enable/disable methods
+
+    @property
+    def is_enabled(self):
+        val = self.response_cleaned.get(self.enablekey,[False])[0]
+        if isinstance(val, basestring):
+            if val.lower() == 'true': return True
+            if val.lower() == 'false': return False
+        return val
+
+    def munge_module_params(self):
+        item = super(EnablableIPAClient, self).munge_module_params()
+        if self.state == 'enabled':
+            item[self.enablekey] = True
+        if self.state == 'disabled':
+            item[self.enablekey] = False
+        return item
+
+    def enable_or_disable(self):
+
+        # Do nothing if enablekey is not in diffs
+        if self.enablekey not in self.diffs['scalars']:
+            return
+
+        # Do nothing if object is being created (enabled by default)
+        if self.is_absent:
+            return
+
+        # Mark task as changed
+        self.changed = True
+
+        # Do nothing in check mode
+        if self.module.check_mode:
+            return
+
+        # Effect requested state
+        enable = self.diffs['scalars'][self.enablekey]
+        request = dict(
+            method = (self._methods['enabled'] if enable \
+                      else self._methods['disabled']),
+            name = self.mod_request_params(),
+            item = {})
+
+        self.requests.append(dict( request = request ))
 

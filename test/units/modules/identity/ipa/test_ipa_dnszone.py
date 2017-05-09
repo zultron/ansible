@@ -3,13 +3,13 @@ from __future__ import (absolute_import, division)
 __metaclass__ = type
 
 from ansible.compat.tests import unittest
-from . import AbstractTestClass
+from . import AbstractEnablableTestClass
 
 from ansible.modules.identity.ipa.ipa_dnszone import DNSZoneIPAClient
 
 import os
 
-class TestDNSZoneIPAClient(unittest.TestCase, AbstractTestClass):
+class TestDNSZoneIPAClient(unittest.TestCase, AbstractEnablableTestClass):
 
     test_class = DNSZoneIPAClient
 
@@ -20,7 +20,7 @@ class TestDNSZoneIPAClient(unittest.TestCase, AbstractTestClass):
     def find_request(self):
         return dict(
             method='dnszone_find',
-            name=[None],
+            name=[],
             item=dict(all = True,
                       idnsname = 'test.%s' % self.domain ),
         )

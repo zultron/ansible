@@ -128,25 +128,22 @@ dnszone:
 '''
 
 from ansible.module_utils.pycompat24 import get_exception
-from ansible.module_utils.ipa import IPAClient
+from ansible.module_utils.ipa import EnablableIPAClient
 
 
-class DNSZoneIPAClient(IPAClient):
+class DNSZoneIPAClient(EnablableIPAClient):
     name = 'dnszone'
 
     kw_args = dict(
         # common params
         idnsname = dict(
-            type='str', required=True,
-            aliases=['name'], when=['find'],
-            when_name=['add','mod','rem','enabled','disabled']),
+            type='str', required=True, aliases=['name'], is_key=True),
         idnssoarname = dict(
             type='str', required=False),
         idnssoamname = dict(
             type='str', required=False),
         idnszoneactive = dict(
-            type='bool', required=False,
-            enablekey=True),
+            type='bool', required=False, enablekey=True, when=[]),
         idnssoaserial = dict(
             type='str', required=False),
         idnssoarefresh = dict(

@@ -18,9 +18,9 @@ class TestDNSRecordIPAClient(unittest.TestCase, AbstractTestClass):
     def find_request(self):
         return dict(
             method='dnsrecord_find',
-            name=[self.domain],
-            item=dict(all = True,
-                      idnsname = {'__dns_name__':'host1'} ),
+            name=[ self.domain ],
+            item={'all': True,
+                  'idnsname': {'__dns_name__':'host1'}},
         )
 
     def test_10_dnsrecord_present_new(self):

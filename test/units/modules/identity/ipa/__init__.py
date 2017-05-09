@@ -96,7 +96,7 @@ class AbstractTestClass(object):
 
     def test_01_init(self):
         # Test module's basic consistency; instance doesn't matter
-        client = self.get_tst_class(live_host_ok=False)
+        client = self.client = self.get_tst_class(live_host_ok=False)
 
         # Verify client._methods keys
         self.assertEqual(set(self.test_class.methods.keys()),
@@ -108,24 +108,6 @@ class AbstractTestClass(object):
                  'ipa_user','ipa_pass','validate_certs']) |
             set(client.kw_args.keys()),
             set(client.argument_spec.keys()))
-
-        # Check for known NAME key in action types
-        for action_type in ['add','rem']:
-            self.assertIsInstance(client.name_map(action_type,0), basestring)
-
-        # Enable/disable checks
-        if 'enabled' in client._methods or 'disabled' in client._methods:
-            # The complement must also exist
-            self.assertIn('enabled', client._methods)
-            self.assertIn('disabled', client._methods)
-            # And the flag param must be specified
-            self.assertIsNotNone(client.enablekey)
-        else: # The opposite:
-            # The complement must not exist
-            self.assertNotIn('enabled', client._methods)
-            self.assertNotIn('disabled', client._methods)
-            # And the flag param must not be specified
-            self.assertIsNone(client.enablekey)
 
 
     #################################################################
@@ -164,7 +146,8 @@ class AbstractTestClass(object):
                     if i == 0:
                         # For initial find() request, use the previous
                         # client final_obj
-                        reply = deepcopy(self.previous_client.final_obj)
+                        reply = deepcopy(
+                            self.previous_client.requests[-1]['response'])
                     else:
                         # For later requests, recycle the previous reply
                         reply = deepcopy(reply_list[-1])
@@ -195,32 +178,50 @@ class AbstractTestClass(object):
             raised_exception = True
 
         #
-        # Verify run
+        # Print a lot of debug data
         #
-        print "Number of calls: %d" % client1._post_json.call_count
+        print "Number of calls: %d; expected: %d" % (
+            client1._post_json.call_count, len(post_json_calls))
+        print "\n*** Module params: ***"
+        pprint(client1.module.params)
+        print "\n*** Module canonical params, state=%s: ***" % client1.state
+        pprint(client1.canon_params)
+        print "\n*** Cleaned response: ***"
+        pprint(client1.response_cleaned)
         for i in range(client1._post_json.call_count):
             if client1._post_json.call_count > i:
-                print "*** Call #%d" % i
                 try:
+                    print "\n*** Call #%d:  %s ***" % \
+                        (i,
+                         (post_json_calls[i]['name'] if i < len(post_json_calls)
+                          else 'EXTRA CALL'))
                     if i > 1 and \
                        client1._post_json.call_args_list[i][1]['method'] in (
                            client1._methods['add'], client1._methods['mod']):
-                        print "--- Cleaned module params:"
-                        pprint(client1.change_params)
                         print "--- Cleaned find reply params:"
                         pprint(client1.curr_params)
                     print "--- Request #%d:" % i
                     pprint(client1._post_json.call_args_list[i][1])
-                    print "--- Expected request #%d:" % i
-                    pprint(post_json_calls[i]['request'])
-                    print "--- Reply:"
-                    pprint(client1.found_obj if i==0 \
-                           else client1.updated_obj if i==1 \
-                           else client1.final_obj)
+                    if i < len(post_json_calls):
+                        print "--- Expected request #%d:" % i
+                        pprint(post_json_calls[i]['request'])
+                    else:
+                        print "--- UNEXPECTED request #%d" % i
+                    print "--- Response:"
+                    pprint(client1.requests[i].get('response','NO RESPONSE'))
+                    if i == 0:
+                        print "--- Cleaned module params:"
+                        pprint(client1.canon_params)
+                        print "--- Diffs:"
+                        pprint(client1.diffs)
                 except Exception as e:
                     print "Exception raised while printing debug info:"
                     print e
                     break
+
+        #
+        # Verify run
+        #
 
         # Raise any earlier exception
         if raised_exception:  raise
@@ -253,7 +254,7 @@ class AbstractTestClass(object):
         #
 
         # - Copy final result from previous object
-        found_obj = deepcopy(client1.final_obj)
+        found_obj = deepcopy(client1.requests[-1]['response'])
         # found_obj.update(deepcopy(idempotency.get('obj_updates',{})))
         # - Patched test class instance
         client2 = self.get_tst_class(
@@ -280,7 +281,7 @@ class AbstractTestClass(object):
         print "--- Expected find() request:"
         pprint(post_json_calls[0]['request'])
         print "--- Reply:"
-        pprint(client2.found_obj)
+        pprint(client2.requests[0]['response'])
         if client2._post_json.call_count > 1:
             try:
                 print "--- Cleaned module params:"
@@ -303,3 +304,22 @@ class AbstractTestClass(object):
         print "\n*** SUCCESS"
 
 
+class AbstractEnablableTestClass(AbstractTestClass):
+
+    def test_01_init(self):
+        super(AbstractEnablableTestClass, self).test_01_init()
+        client = self.client
+
+        # Enable/disable checks
+        if 'enabled' in client._methods or 'disabled' in client._methods:
+            # The complement must also exist
+            self.assertIn('enabled', client._methods)
+            self.assertIn('disabled', client._methods)
+            # And the flag param must be specified
+            self.assertIsNotNone(client.enablekey)
+        else: # The opposite:
+            # The complement must not exist
+            self.assertNotIn('enabled', client._methods)
+            self.assertNotIn('disabled', client._methods)
+            # And the flag param must not be specified
+            self.assertIsNone(client.enablekey)

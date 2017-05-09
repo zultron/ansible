@@ -122,11 +122,9 @@ class DNSRecordIPAClient(IPAClient):
 
     kw_args = dict(
         zone=dict(
-            type='str', required=True,
-            when_name=['add', 'mod','rem','find']),
+            type='str', required=True, is_key=True),
         idnsname = dict(
-            type='str', required=True, req_key='__dns_name__', aliases=['name'],
-            when=['find'], when_name=['add','mod','rem'],),
+            type='str', required=True, aliases=['name'], is_key=True),
         arecord = dict(
             type='list', required=False),
         aaaarecord = dict(
@@ -166,6 +164,34 @@ class DNSRecordIPAClient(IPAClient):
         txtrecord = dict(
             type='list', required=False),
     )
+
+    # dnsrecord wants find() search params like these:
+    # [ [ "example.com" ], 
+    #   { "idnsname": { "__dns_name__": "host1" } }
+    # ]
+    def find_request_params(self):
+        cleaned_params = self.clean(self.module.params)
+        print "cleaned_params = %s" % cleaned_params
+        return [cleaned_params['zone']]
+
+    def find_request_item(self):
+        cleaned_params = self.clean(self.module.params)
+        item = {'all': True,
+                'idnsname': { '__dns_name__': cleaned_params['idnsname'] },
+            }
+        return item
+
+    def mod_request_params(self):
+        # dnsrecord wants add()/mod() request params like these:
+        # [ "example.com",
+        #   { "__dns_name__": "host1" },
+        # ]
+
+        cleaned_params = self.clean(self.module.params)
+        print "cleaned_params = %s" % cleaned_params
+        return [cleaned_params['zone'],
+                { '__dns_name__': cleaned_params['idnsname'] },
+            ]
 
     def rem_request_cleanup(self, request):
         request['item']['del_all'] = True
