@@ -160,7 +160,7 @@ class CAACLIPAClient(EnablableIPAClient):
 
     def munge_response(self, item):
         item = self.munge_response_keys(item.copy())
-        item = super(EnablableIPAClient, self).munge_response(item)
+        item = super(CAACLIPAClient, self).munge_response(item)
         return item
 
     def add_remove_list_items(self):
