@@ -361,7 +361,7 @@ class IPAClient(object):
             for k in change_slice['scalar']:
                 if change_slice['scalar'][k] == \
                    curr_slice['scalar'].get(k,None):
-                    changes['scalars'][k] = change_slice[k]
+                    changes['scalars'][k] = None
 
         return changes
 

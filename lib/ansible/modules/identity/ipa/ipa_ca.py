@@ -89,22 +89,30 @@ from ansible.module_utils.ipa import IPAClient
 class CAIPAClient(IPAClient):
     name = 'ca'
 
-    methods = dict(
-        add = '{}_add',
-        rem = '{}_del',
-        mod = '{}_mod',
-        find = '{}_find',
-        show = '{}_show',
-        )
+    param_keys = set(('cn',))
 
     kw_args = dict(
-        cn = dict(type='str', required=True, aliases=['name'],
-                  when_name=['add','mod','rem'], when=['find']),
-        ipacasubjectdn = dict(
-            type='str', required=False, when=['add']),
-        description = dict(
-            type='str', required=False),
+        cn =             dict(type='str', required=True, aliases=['name']),
+        ipacasubjectdn = dict(type='str', required=False),
+        description =    dict(type='str', required=False),
     )
+
+    def mod_rewrite_list_changes(self, request):
+        # Once the CA is created, nothing may be modified except the
+        # description
+        super(CAIPAClient, self).mod_rewrite_list_changes(request)
+
+        # Only applies to ca_mod operation
+        if request['method'] != 'ca_mod':  return
+
+        # Raise error for any keys other than 'description' (and
+        # auto-added 'all')
+        keys = set(request['item'].keys())
+        keys.discard('all'); keys.discard('description');
+        if len(keys) > 0:
+            self._fail(tuple(keys),
+                       'Unable to modify CA parameters other than description')
+
 
 def main():
     CAIPAClient().main()

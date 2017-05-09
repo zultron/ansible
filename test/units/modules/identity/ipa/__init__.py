@@ -175,8 +175,10 @@ class AbstractTestClass(object):
         try:
             client1.ensure()
             raised_exception = False
-        except:
+        except Exception as e:
             # Defer raising exception until after printing debug info
+            print "Exception raised while running client1.ensure():"
+            print e
             raised_exception = True
 
         #
@@ -217,10 +219,10 @@ class AbstractTestClass(object):
                         print "--- Cleaned module params:"
                         pprint(client1.canon_params)
                         print "--- Diffs:"
-                        pprint(client1.diffs)
-                except Exception as e:
+                        pprint(getattr(client1,'diffs','diffs not available'))
+                except Exception as e_print:
                     print "Exception raised while printing debug info:"
-                    print e
+                    print e_print
                     break
 
         #

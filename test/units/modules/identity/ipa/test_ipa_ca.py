@@ -17,7 +17,7 @@ class TestCAIPAClient(unittest.TestCase, AbstractTestClass):
     find_request = {
         'item': {'all': True, 'cn': 'Test CA'},
         'method': 'ca_find',
-        'name': [None],
+        'name': [],
     }
 
     def test_10_ca_present_new(self):
@@ -46,7 +46,10 @@ class TestCAIPAClient(unittest.TestCase, AbstractTestClass):
                         'method' : 'ca_add',
                     },
                     reply_updates = {
-                        "description": [ "For testing Ansible" ]},
+                        "description": [ "For testing Ansible" ],
+                        'ipacasubjectdn': 'CN=Test CA,O=%s' % (
+                            self.domain.upper()),
+                    },
                 ),
                 # no enable_or_disable
             ],
@@ -82,12 +85,18 @@ class TestCAIPAClient(unittest.TestCase, AbstractTestClass):
         )
 
     def test_12_ca_exact_existing(self):
+        # Using state=exact on a CA is not very meaningful, since only
+        # the description may be changed; not specifying an unchanged
+        # ipacasubjectdn results in an attempt to remove the paramater
+        # that is illegal to modify
         self.runner(
             test_key = 12,
             module_params = dict(
                 cn = "Test CA",
                 state = "exact",
                 description = "Some Ansible test artifact",
+                ipacasubjectdn = 'CN=Test CA,O=%s' % (
+                    self.domain.upper()),
             ),
             post_json_calls = [
                 dict(
