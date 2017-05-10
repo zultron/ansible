@@ -9,63 +9,54 @@ from copy import deepcopy
 from pprint import pprint
 import os
 
+class IPATestError(RuntimeError):
+    pass
+
 class AbstractTestClass(object):
 
     # test_class = SomeNameIPAClient
     test_class = None
 
-    # Module parameters as supplied in task
-    module_params = dict(
-        # param1 = "val1",
-        # state = "enabled",
-        # ipa_host = "host1.example.com",
-        # ipa_user = "admin",
-        # ipa_pass = "secretpass",
-    )
-
     live_host = os.getenv('IPA_HOST', False)
 
-    @property
-    def domain(self):
-        return os.getenv('IPA_DOMAIN', 'example.com')
+    ipa_domain = os.getenv('IPA_DOMAIN', 'example.com')
 
+    ipa_host = os.getenv('IPA_HOST','host1.example.com')
+    ipa_user = os.getenv('IPA_USER','admin')
+    ipa_pass = os.getenv('IPA_PASS','secretpass')
+
+    @classmethod
     @patch('ansible.module_utils.ipa.AnsibleModule', autospec=True)
-    def get_tst_class(self, mod_cls,
+    def get_tst_class(cls, mod_cls,
                       module_params={},
                       reply_list=[],
                       live_host_ok=True):
 
-        live_host = self.live_host and live_host_ok
+        live_host = cls.live_host and live_host_ok
 
         # Init reply_list
         if live_host:
-            self.reply_list = []
+            reply_list = []
         else:
-            self.reply_list = reply_list
+            reply_list = reply_list
 
         # Mock AnsibleModule instance
         mod = mod_cls.return_value
         # Turn off check mode
         mod.check_mode = False
         # Add module params
-        mod.params = module_params.copy() or self.module_params.copy()
-        if live_host:
-            mod.params.update(dict(
-                ipa_host = os.getenv('IPA_HOST'),
-                ipa_user = os.getenv('IPA_USER'),
-                ipa_pass = os.getenv('IPA_PASS')))
-        else:
-            mod.params.update(dict(
-            ipa_host = 'host1.example.com',
-            ipa_user = 'admin',
-            ipa_pass = 'secretpass'))
+        mod.params = module_params.copy()
+        mod.params.update(dict(
+            ipa_host = cls.ipa_host,
+            ipa_user = cls.ipa_user,
+            ipa_pass = cls.ipa_pass))
         mod.params['ipa_prot'] = 'https'
         # The fail_json() method must raise an exception
-        def raise_exception(msg):  raise RuntimeError(msg)
+        def raise_exception(msg):  raise IPATestError(msg)
         mod.fail_json = MagicMock(side_effect=raise_exception)
 
         # Create test class instance
-        client = self.test_class()
+        client = cls.test_class()
         if live_host:
             client.login()
 
@@ -79,14 +70,14 @@ class AbstractTestClass(object):
             pj = client._post_json
             def _post_json_wrapper(*args, **kwargs):
                 reply = pj(*args, **kwargs)
-                self.reply_list.append(reply)
+                reply_list.append(reply)
                 return reply
-            self.mock_post_json = MagicMock(
+            mock_post_json = MagicMock(
                 side_effect=_post_json_wrapper)
         else:
-            self.mock_post_json = MagicMock(
-                side_effect=self.reply_list)
-        client._post_json = self.mock_post_json
+            mock_post_json = MagicMock(
+                side_effect=reply_list)
+        client._post_json = mock_post_json
 
         return client
 
@@ -96,7 +87,9 @@ class AbstractTestClass(object):
 
     def test_01_init(self):
         # Test module's basic consistency; instance doesn't matter
-        client = self.client = self.get_tst_class(live_host_ok=False)
+        client = self.get_tst_class(
+            live_host_ok=False)
+        self.client = client
 
         # Verify client._methods keys
         self.assertEqual(set(self.test_class.methods.keys()),
@@ -297,7 +290,7 @@ class AbstractTestClass(object):
         print "--- Cleaned module params:"
         pprint(client1.canon_params)
         print "--- Diffs:"
-        pprint(client2.diffs)
+        pprint(getattr(client2,'diffs','diffs not available'))
         if client2._post_json.call_count > 1:
             try:
                 print "--- Second request:"

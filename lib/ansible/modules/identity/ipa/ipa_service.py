@@ -113,6 +113,8 @@ class ServiceIPAClient(IPAClient):
         show = '{}_show',
         )
 
+    param_keys = set(('krbcanonicalname',))
+
     kw_args = dict(
         krbcanonicalname = dict(
             type='str', required=True, aliases=['name'],
@@ -176,37 +178,48 @@ class ServiceIPAClient(IPAClient):
             type='list', required=False),
     )
 
-    def filter_value(self, key, val, dirty, item, action):
-        if key == 'usercertificate':
-            print "usercertificate val is %s" % val
-        if key == 'usercertificate' and action != 'find':
-            new_val = item.setdefault(key, [])
-            for v in val:
-                if isinstance(v,dict) and '__base64__' in v:
-                    # Replace dict values with strings:
-                    # from:  'usercertificate': [{'__base64__': 'MIIC[...]QLnA='}]
-                    #   to:  'usercertificate': ['MIIC[...]QLnA=']
-                    new_val.append(v['__base64__'])
-                else:
-                    new_val.append(v)
-            return True
+    def munge_response_usercertificate(self, response):
+        # Replace dict value with string:
+        # from:  'usercertificate': {'__base64__': 'MIIC[...]QLnA='}
+        #   to:  'usercertificate': 'MIIC[...]QLnA='
+        if 'usercertificate' not in response:  return response
 
-        if key == 'krbprincipalname':
-            # krbprincipalname list:  This list of principal aliases
-            # always includes the principal canonical name.  Aliases
-            # specified in this list should avoid touching that value.
-            item[key] = list(val)
-            item[key].remove(self.module.params.get('krbcanonicalname'))
-            return True
+        v = response.pop('usercertificate')
+        if isinstance(v,dict) and '__base64__' in v:
+            response['usercertificate'] = v['__base64__']
+        else:
+            response['usercertificate'] = v
+        return response
 
-        if key.startswith('ipaallowedtoperform;'):
-            # Filter account DNs of the right type and return the uid/cn/fqdn
-            #
-            # uid=admin,cn=users,cn=accounts,dc=example,dc=com
-            # cn=editors,cn=groups,cn=accounts,dc=example,dc=com
-            # fqdn=host1.example.com,cn=computers,cn=accounts,dc=example,dc=com
-            # cn=ipaservers,cn=hostgroups,cn=accounts,dc=example,dc=com
+    def munge_response_krbprincipalname(self, response):
+        # krbprincipalname list:  This list of principal aliases
+        # always includes the principal canonical name.  Aliases
+        # specified in this list should avoid touching that value.
 
+        if 'krbprincipalname' not in response:  return response
+        # Duplicate original list
+        new_val = list(response.pop('krbprincipalname'))
+        # Remove principal canonical name
+        new_val.remove(
+            self.module.params.get('krbcanonicalname'))
+        # Add back
+        if new_val:
+            response['krbprincipalname'] = new_val
+
+        return response
+
+    def munge_response_ipaallowedtoperform(self, response):
+        # Filter account DNs of the right type and return the uid/cn/fqdn
+        #
+        # uid=admin,cn=users,cn=accounts,dc=example,dc=com
+        # cn=editors,cn=groups,cn=accounts,dc=example,dc=com
+        # fqdn=host1.example.com,cn=computers,cn=accounts,dc=example,dc=com
+        # cn=ipaservers,cn=hostgroups,cn=accounts,dc=example,dc=com
+
+        for key in response:
+            if not key.startswith('ipaallowedtoperform;'): continue
+
+            val = response.pop(key)
             op = re.match(r'ipaallowedtoperform;(.*)_keys', key).group(1)
             for v in val:
                 m = re.match(
@@ -214,35 +227,49 @@ class ServiceIPAClient(IPAClient):
                 if m is not None:
                     name, acct_type = m.groups()
                     if acct_type == 'computers':  acct_type = 'hosts'
-                    item.setdefault(
+                    response.setdefault(
                         '%s_keytab_%s' % (op, acct_type), []).append(name)
-            return True
+        return response
 
-        if key == 'managedby':
-            # managedby attribute value:
-            # fqdn=host1.example.com,cn=computers,cn=accounts,dc=example,dc=com
-            for v in val:
-                m = re.match( r'fqdn=([^,]*),cn=computers,cn=accounts', v)
-                if m is not None:
-                    item.setdefault('host',[]).append(m.group(1))
-            return True
+    def munge_response_managedby(self, response):
+        # managedby attribute value:
+        # fqdn=host1.example.com,cn=computers,cn=accounts,dc=example,dc=com
+        if 'managedby' not in response:  return response
 
-        # These are broken out of the krbticketflags param of the reply
-        if key == 'krbticketflags':
-            for new_key, bit in (('ipakrbrequirespreauth', 128),
-                                 ('ipakrbokasdelegate', 1048576),
-                                 ('ipakrboktoauthasdelegate', 2097152)):
-                new_v = bool( val[0] & bit )
-                if new_v is False and \
-                   self.module.params['state'] in ('absent', 'exact'):
-                    # ipakrb* : False doesn't make sense in 'absent'
-                    # and superfluous in 'exact'
-                    continue
-                item[new_key] = [new_v]
-            return True
+        for v in response.pop('managedby'):
+            m = re.match( r'fqdn=([^,]*),cn=computers,cn=accounts', v)
+            if m is not None:
+                response.setdefault('host',[]).append(m.group(1))
+        return response
+
+    # def munge_response_krbticketflags(self, response):
+    #     # These are broken out of the krbticketflags param of the reply
+    #     if key == 'krbticketflags':
+    #         for new_key, bit in (('ipakrbrequirespreauth', 128),
+    #                              ('ipakrbokasdelegate', 1048576),
+    #                              ('ipakrboktoauthasdelegate', 2097152)):
+    #             new_v = bool( val[0] & bit )
+    #             if new_v is False and \
+    #                self.module.params['state'] in ('absent', 'exact'):
+    #                 # ipakrb* : False doesn't make sense in 'absent'
+    #                 # and superfluous in 'exact'
+    #                 continue
+    #             item[new_key] = [new_v]
+    #         return True
+
+    def munge_response(self, response):
+        item = super(ServiceIPAClient, self).munge_response(response)
+
+        item = self.munge_response_usercertificate(item)
+        item = self.munge_response_krbprincipalname(item)
+        item = self.munge_response_ipaallowedtoperform(item)
+        item = self.munge_response_managedby(item)
+        # item = self.munge_response_krbticketflags(item)
+        return item
 
 
     def request_cleanup(self, request):
+
         # Allow krbticketflags and ipaAllowedToPerform;read/write_keys
         # request parameters to be composed from multiple other params
         # that are simpler to deal with in a task spec

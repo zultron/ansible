@@ -22,7 +22,7 @@ class TestDNSZoneIPAClient(unittest.TestCase, AbstractEnablableTestClass):
             method='dnszone_find',
             name=[],
             item=dict(all = True,
-                      idnsname = 'test.%s' % self.domain ),
+                      idnsname = 'test.%s' % self.ipa_domain ),
         )
 
     def test_10_dnszone_enabled_new(self):
@@ -34,12 +34,12 @@ class TestDNSZoneIPAClient(unittest.TestCase, AbstractEnablableTestClass):
                     " in live host mode; e.g. 'host1.example.com.'")
             self.nsrecord = nsrecord.split(',')
         else:
-            self.nsrecord = ['host2.%s' % self.domain]
+            self.nsrecord = ['host2.%s' % self.ipa_domain]
 
         self.runner(
             test_key = 10,
             module_params = dict(
-                idnsname = "test.%s" % self.domain,
+                idnsname = "test.%s" % self.ipa_domain,
                 state = "enabled",                    # Enabled:
                 idnsallowdynupdate = True,            # Add
                 idnsallowtransfer = "none;",          # Add
@@ -60,7 +60,7 @@ class TestDNSZoneIPAClient(unittest.TestCase, AbstractEnablableTestClass):
                                               for r in self.nsrecord],
                                   'all': True},
                         'method' : 'dnszone_add',
-                        'name' : ['test.%s' % self.domain]},
+                        'name' : ['test.%s' % self.ipa_domain]},
                     reply_updates = {
                         'idnsallowdynupdate': ['True'],
                         'idnsallowtransfer': ['none;'],
@@ -75,7 +75,7 @@ class TestDNSZoneIPAClient(unittest.TestCase, AbstractEnablableTestClass):
         self.runner(
             test_key = 11,
             module_params = dict(
-                idnsname = "test.%s" % self.domain,
+                idnsname = "test.%s" % self.ipa_domain,
                 state = "enabled",                  # Enabled:
                 idnsallowdynupdate = False,         # Modify
                 idnsallowtransfer = "none;",        # Noop
@@ -91,7 +91,7 @@ class TestDNSZoneIPAClient(unittest.TestCase, AbstractEnablableTestClass):
                         'item' : {'idnsallowdynupdate': False,
                                   'all': True},
                         'method' : 'dnszone_mod',
-                        'name' : ['test.%s' % self.domain]},
+                        'name' : ['test.%s' % self.ipa_domain]},
                     reply_updates = {
                         'idnsallowdynupdate': ['FALSE'],
                     },
@@ -104,7 +104,7 @@ class TestDNSZoneIPAClient(unittest.TestCase, AbstractEnablableTestClass):
         self.runner(
             test_key = 12,
             module_params = dict(
-                idnsname = "test.%s" % self.domain,
+                idnsname = "test.%s" % self.ipa_domain,
                 state = "disabled",                  # Disabled
             ),
             post_json_calls = [
@@ -117,7 +117,7 @@ class TestDNSZoneIPAClient(unittest.TestCase, AbstractEnablableTestClass):
                     request = {
                         'item' : {},
                         'method' : 'dnszone_disable',
-                        'name' : ['test.%s' % self.domain]},
+                        'name' : ['test.%s' % self.ipa_domain]},
                     reply_updates = { 'idnszoneactive': ['FALSE'] },
                 ),
             ],
@@ -127,7 +127,7 @@ class TestDNSZoneIPAClient(unittest.TestCase, AbstractEnablableTestClass):
         self.runner(
             test_key = 13,
             module_params = dict(
-                idnsname = "test.%s" % self.domain,
+                idnsname = "test.%s" % self.ipa_domain,
                 state = "absent",                  # Absent
             ),
             post_json_calls = [
@@ -140,7 +140,7 @@ class TestDNSZoneIPAClient(unittest.TestCase, AbstractEnablableTestClass):
                     request = {
                         'item' : {},
                         'method' : 'dnszone_del',
-                        'name' : ['test.%s' % self.domain]},
+                        'name' : ['test.%s' % self.ipa_domain]},
                     reply = {},
                 ),
             ],

@@ -26,7 +26,7 @@ class TestCAIPAClient(unittest.TestCase, AbstractTestClass):
             module_params = dict(
                 cn = "Test CA",
                 description = "For testing Ansible",
-                ipacasubjectdn = 'CN=Test CA,O=%s' % self.domain.upper(),
+                ipacasubjectdn = 'CN=Test CA,O=%s' % self.ipa_domain.upper(),
                 state = "present",
             ),
             post_json_calls = [
@@ -41,14 +41,14 @@ class TestCAIPAClient(unittest.TestCase, AbstractTestClass):
                         'name' : ['Test CA'],
                         'item' : {'description': 'For testing Ansible',
                                   'ipacasubjectdn': 'CN=Test CA,O=%s' % (
-                                      self.domain.upper()),
+                                      self.ipa_domain.upper()),
                                   'all': True},
                         'method' : 'ca_add',
                     },
                     reply_updates = {
                         "description": [ "For testing Ansible" ],
                         'ipacasubjectdn': 'CN=Test CA,O=%s' % (
-                            self.domain.upper()),
+                            self.ipa_domain.upper()),
                     },
                 ),
                 # no enable_or_disable
@@ -96,7 +96,7 @@ class TestCAIPAClient(unittest.TestCase, AbstractTestClass):
                 state = "exact",
                 description = "Some Ansible test artifact",
                 ipacasubjectdn = 'CN=Test CA,O=%s' % (
-                    self.domain.upper()),
+                    self.ipa_domain.upper()),
             ),
             post_json_calls = [
                 dict(

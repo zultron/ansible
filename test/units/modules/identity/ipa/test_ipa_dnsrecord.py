@@ -18,7 +18,7 @@ class TestDNSRecordIPAClient(unittest.TestCase, AbstractTestClass):
     def find_request(self):
         return dict(
             method='dnsrecord_find',
-            name=[ self.domain ],
+            name=[ self.ipa_domain ],
             item={'all': True,
                   'idnsname': {'__dns_name__':'host1'}},
         )
@@ -27,7 +27,7 @@ class TestDNSRecordIPAClient(unittest.TestCase, AbstractTestClass):
         self.runner(
             test_key = 10,
             module_params = dict(
-                zone = self.domain,
+                zone = self.ipa_domain,
                 idnsname = "host1",
                 arecord = [ "192.168.42.38", "192.168.43.38" ],
                 txtrecord = "new text",
@@ -47,7 +47,7 @@ class TestDNSRecordIPAClient(unittest.TestCase, AbstractTestClass):
                                              'txtrecord=new text'],
                                  'all': True},
                         'method': 'dnsrecord_add',
-                        'name': [self.domain, {'__dns_name__': 'host1'}]},
+                        'name': [self.ipa_domain, {'__dns_name__': 'host1'}]},
                     reply_updates = {
                         'arecord': ['192.168.42.38', '192.168.43.38'],
                         'txtrecord': ['new text']},
@@ -60,14 +60,14 @@ class TestDNSRecordIPAClient(unittest.TestCase, AbstractTestClass):
         self.runner(
             test_key = 11,
             module_params = dict(
-                zone = self.domain,
+                zone = self.ipa_domain,
                 idnsname = "host1",
-                state = "present",                      # Present:
-                arecord = [ "192.168.42.39" ],          # New
-                mxrecord = ['10 mx1.%s' % self.domain,  # New
-                            '10 mx2.%s' % self.domain,  # New
-                            '10 mx3.%s' % self.domain], # New
-                txtrecord = "new text",                 # Same
+                state = "present",                          # Present:
+                arecord = [ "192.168.42.39" ],              # New
+                mxrecord = ['10 mx1.%s' % self.ipa_domain,  # New
+                            '10 mx2.%s' % self.ipa_domain,  # New
+                            '10 mx3.%s' % self.ipa_domain], # New
+                txtrecord = "new text",                     # Same
             ),
             post_json_calls = [
                 dict(
@@ -77,12 +77,12 @@ class TestDNSRecordIPAClient(unittest.TestCase, AbstractTestClass):
                 dict(
                     name = 'modify existing object',
                     request = {
-                        'name': [self.domain, {'__dns_name__': 'host1'}],
+                        'name': [self.ipa_domain, {'__dns_name__': 'host1'}],
                         'item': {'addattr': [
                             'arecord=192.168.42.39',
-                            'mxrecord=10 mx1.%s' % self.domain,
-                            'mxrecord=10 mx2.%s' % self.domain,
-                            'mxrecord=10 mx3.%s' % self.domain ],
+                            'mxrecord=10 mx1.%s' % self.ipa_domain,
+                            'mxrecord=10 mx2.%s' % self.ipa_domain,
+                            'mxrecord=10 mx3.%s' % self.ipa_domain ],
                                  'all': True},
                         'method': 'dnsrecord_mod',
                     },
@@ -90,9 +90,9 @@ class TestDNSRecordIPAClient(unittest.TestCase, AbstractTestClass):
                         'arecord': [ "192.168.42.38",
                                      "192.168.43.38",
                                      "192.168.42.39" ],
-                        'mxrecord': ['10 mx1.%s' % self.domain,
-                                     '10 mx2.%s' % self.domain,
-                                     '10 mx3.%s' % self.domain ],
+                        'mxrecord': ['10 mx1.%s' % self.ipa_domain,
+                                     '10 mx2.%s' % self.ipa_domain,
+                                     '10 mx3.%s' % self.ipa_domain ],
                     },
                 ),
                 # No enable/disable operation
@@ -103,17 +103,17 @@ class TestDNSRecordIPAClient(unittest.TestCase, AbstractTestClass):
         self.runner(
             test_key = 12,
             module_params = dict(
-                zone = self.domain,
+                zone = self.ipa_domain,
                 idnsname = "host1",
-                state = "absent",                            # Absent:
-                arecord = [ "192.168.42.38",                 # Remove
-                            "192.168.43.38",                 # Remove
-                            "192.168.42.50" ],               # Noop
+                state = "absent",                             # Absent:
+                arecord = [ "192.168.42.38",                  # Remove
+                            "192.168.43.38",                  # Remove
+                            "192.168.42.50" ],                # Noop
                 srvrecord = [
-                    '0 100 88 host1.%s.' % self.domain ],    # Noop
-                mxrecord = ['10 mx2.%s' % self.domain,       # Remove
-                            '10 mx3.%s' % self.domain],      # Remove
-                txtrecord = "new text",                      # Remove
+                    '0 100 88 host1.%s.' % self.ipa_domain ], # Noop
+                mxrecord = ['10 mx2.%s' % self.ipa_domain,    # Remove
+                            '10 mx3.%s' % self.ipa_domain],   # Remove
+                txtrecord = "new text",                       # Remove
             ),
             post_json_calls = [
                 dict(
@@ -123,17 +123,19 @@ class TestDNSRecordIPAClient(unittest.TestCase, AbstractTestClass):
                 dict(
                     name = 'delete attributes from existing object',
                     request = {
-                        'item': {'delattr': ['arecord=192.168.42.38',
-                                             'arecord=192.168.43.38',
-                                             'mxrecord=10 mx2.%s' % self.domain,
-                                             'mxrecord=10 mx3.%s' % self.domain,
-                                             'txtrecord=new text' ],
-                                 'all': True},
+                        'item': {
+                            'delattr': [
+                                'arecord=192.168.42.38',
+                                'arecord=192.168.43.38',
+                                'mxrecord=10 mx2.%s' % self.ipa_domain,
+                                'mxrecord=10 mx3.%s' % self.ipa_domain,
+                                'txtrecord=new text' ],
+                            'all': True},
                         'method': 'dnsrecord_mod',
-                        'name': [self.domain, {'__dns_name__': 'host1'}]},
+                        'name': [self.ipa_domain, {'__dns_name__': 'host1'}]},
                     reply_updates = {
                         'arecord': [ "192.168.42.39" ],
-                        'mxrecord': ['10 mx1.%s' % self.domain ],
+                        'mxrecord': ['10 mx1.%s' % self.ipa_domain ],
                         'txtrecord': None,
                     },
                 ),
@@ -145,13 +147,13 @@ class TestDNSRecordIPAClient(unittest.TestCase, AbstractTestClass):
         self.runner(
             test_key = 13,
             module_params = dict(
-                zone = "%s" % self.domain,
+                zone = "%s" % self.ipa_domain,
                 idnsname = "host1",
                 state = "exact",                                 # Exact:
                 arecord = [ "192.168.42.39",                     # Noop
                             "192.168.42.38" ],                   # Add
-                mxrecord = [# '10 mx1.%s' % self.domain,         # Remove
-                            '10 mx2.%s' % self.domain ],         # Add
+                mxrecord = [# '10 mx1.%s' % self.ipa_domain,     # Remove
+                            '10 mx2.%s' % self.ipa_domain ],     # Add
                 txtrecord = "newer text",                        # Add
             ),
             post_json_calls = [
@@ -165,17 +167,17 @@ class TestDNSRecordIPAClient(unittest.TestCase, AbstractTestClass):
                         'item': {
                             'addattr': [
                                 'arecord=192.168.42.38',
-                                'mxrecord=10 mx2.%s' % self.domain,
+                                'mxrecord=10 mx2.%s' % self.ipa_domain,
                                 'txtrecord=newer text',                            
                             ],
                             'delattr': [
-                                'mxrecord=10 mx1.%s' % self.domain ],
+                                'mxrecord=10 mx1.%s' % self.ipa_domain ],
                             'all': True},
                         'method': 'dnsrecord_mod',
-                        'name': [self.domain, {'__dns_name__': 'host1'}]},
+                        'name': [self.ipa_domain, {'__dns_name__': 'host1'}]},
                     reply_updates = {
                         'arecord': [ "192.168.42.39", "192.168.42.38" ],
-                        'mxrecord': [ '10 mx2.%s' % self.domain ],
+                        'mxrecord': [ '10 mx2.%s' % self.ipa_domain ],
                         'txtrecord': [ 'newer text' ],
                     },
                 ),
@@ -187,7 +189,7 @@ class TestDNSRecordIPAClient(unittest.TestCase, AbstractTestClass):
         self.runner(
             test_key = 14,
             module_params = dict(
-                zone = self.domain,
+                zone = self.ipa_domain,
                 idnsname = "host1",
                 state = "absent",                         # Absent
             ),
@@ -201,7 +203,7 @@ class TestDNSRecordIPAClient(unittest.TestCase, AbstractTestClass):
                     request = {
                         'item': {'del_all' : True},
                         'method': 'dnsrecord_del',
-                        'name': ['%s' % self.domain,
+                        'name': ['%s' % self.ipa_domain,
                                  {'__dns_name__': 'host1'}]},
                     reply = {},
                 ),

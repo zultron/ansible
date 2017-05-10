@@ -304,7 +304,7 @@ class IPAClient(object):
     def get_slice(self, params):
         res = {'list':{}, 'scalar':{}}
         for key in params:
-            if self.param_data[key]['type'] == 'list':
+            if self.param_data.get(key,{}).get('type',None) == 'list':
                 res['list'][key] = params[key]
             else:
                 res['scalar'][key] = params[key]
@@ -373,7 +373,6 @@ class IPAClient(object):
 
     def munge_module_params(self):
         item = self.clean(self.module.params)
-        item = self.filter_params_on_when(item, 'mod')
         item = self.munge_pop_request_keys(item)
         return item
 
@@ -490,14 +489,24 @@ class IPAClient(object):
         # Classes may override to munge request
         pass
 
+    def rem_request_params(self):
+        return self.mod_request_params()
+
+    def rem_request_item(self):
+        return {}
+
+    def is_rem_param_request(self):
+        # Module params contain object params; 'absent' means
+        # absent attributes, not absent object
+        return bool(self.canon_params)
+
     def rem(self):
         if self.state != 'absent':
             # Not removing object; signal to continue
             return False
 
-        if self.canon_params:
-            # Module params contain object params; 'absent' means
-            # absent attributes, not absent object
+        if self.is_rem_param_request():
+            # state='absent' means remove params, not remove object
             return False
 
         if self.is_absent:
@@ -511,8 +520,8 @@ class IPAClient(object):
         # Generate remove request
         request = dict(
             method = self._methods['rem'],
-            name = self.mod_request_params(),
-            item = {})
+            name = self.rem_request_params(),
+            item = self.rem_request_item())
 
         # Run any subclass request cleanups
         self.rem_request_cleanup(request)
