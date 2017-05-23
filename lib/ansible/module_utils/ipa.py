@@ -426,12 +426,14 @@ class IPAClient(object):
     #######################################################
     # add/modify base params
 
-    def mod_request_params(self):
+    def mod_request_params(self, extra_vals=None):
         name = []
         for k in self.module.params:
             if k not in self.param_data: continue
             if k in self.param_keys:
                 name.append( self.module.params[k] )
+        if extra_vals is not None:
+            name.extend(extra_vals)
         return name
 
     def mod_rewrite_list_changes(self, request):
@@ -595,6 +597,9 @@ class EnablableIPAClient(IPAClient):
     # Subclasses must override
     enablekey = None
 
+    # Subclasses:  Set to True if object enabled when enablekey False
+    enablekey_sense_inverted = False
+
     #######################################################
     # enable/disable methods
 
@@ -606,20 +611,16 @@ class EnablableIPAClient(IPAClient):
         if not hasattr(self.__class__, 'base_keys'):
             self.base_keys.discard(self.enablekey)
 
-    @property
-    def is_enabled(self):
-        val = self.response_cleaned.get(self.enablekey,[False])[0]
-        if isinstance(val, basestring):
-            if val.lower() == 'true': return True
-            if val.lower() == 'false': return False
-        return val
-
     def munge_module_params(self):
         item = super(EnablableIPAClient, self).munge_module_params()
         if self.state == 'enabled':
             item[self.enablekey] = True
-        if self.state == 'disabled':
+        elif self.state == 'disabled':
             item[self.enablekey] = False
+        else:
+            return item
+        if self.enablekey_sense_inverted:
+            item[self.enablekey] = not item[self.enablekey]
         return item
 
     def enable_or_disable(self):
@@ -639,6 +640,8 @@ class EnablableIPAClient(IPAClient):
 
         # Effect requested state
         enable = self.diffs['scalars'][self.enablekey]
+        if self.enablekey_sense_inverted:
+            enable = not enable
         request = dict(
             method = (self._methods['enabled'] if enable \
                       else self._methods['disabled']),

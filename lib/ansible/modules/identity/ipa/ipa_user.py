@@ -143,195 +143,207 @@ user:
 
 import base64
 import hashlib
+import re
 
-from ansible.module_utils.basic import AnsibleModule
-from ansible.module_utils.pycompat24 import get_exception
-from ansible.module_utils.ipa import IPAClient
+from ansible.module_utils.ipa import EnablableIPAClient
 
+class UserIPAClient(EnablableIPAClient):
+    name = 'user'
 
-class UserIPAClient(IPAClient):
-    def __init__(self, module, host, port, protocol):
-        super(UserIPAClient, self).__init__(module, host, port, protocol)
+    change_functions = tuple(
+        list(EnablableIPAClient.change_functions) +
+        ['handle_cert', 'handle_principal'] )
 
-    def user_find(self, name):
-        return self._post_json(method='user_find', name=None, item={'all': True, 'uid': name})
+    param_keys = set(['uid'])
+    base_keys = set([
+        'givenname', 'sn', 'cn', 'displayname', 'initials', 'homedirectory',
+        'gecos', 'loginshell', 'mail', 'password', 'gidnumber',
+        'street', 'l', 'st', 'postalcode',
+        'telephonenumber', 'mobile', 'pager', 'fax',
+        'orgunit', 'title', 'manager', 'carlicense', 'ipasshpubkey',
+        'user_auth_type', 'category', 'radius', 'radius_username',
+        'departmentnumber', 'employeenumber', 'employeetype',
+        'preferredlanguage',
+        ])
+    enablekey = 'nsaccountlock'
+    enablekey_sense_inverted = True
 
-    def user_add(self, name, item):
-        return self._post_json(method='user_add', name=name, item=item)
+    kw_args = dict(
+        uid=dict(
+            type='str', required=True),
+        # Base add/mod keys
+        givenname=dict(
+            type='str', required=False, aliases=['first']),
+        sn=dict(
+            type='str', required=False, aliases=['last']),
+        cn=dict(
+            type='str', required=False),
+        displayname=dict(
+            type='str', required=False),
+        initials=dict(
+            type='str', required=False),
+        homedirectory=dict(
+            type='str', required=False, aliases=['homedir']),
+        gecos=dict(
+            type='str', required=False),
+        loginshell=dict(
+            type='str', required=False, aliases=['shell']),
+        mail=dict(
+            type='list', required=False, aliases=['email']),
+        password=dict(
+            type='str', required=False, no_log=True),
+        gidnumber=dict(
+            type='int', required=False),
+        street=dict(
+            type='str', required=False),
+        l=dict(
+            type='str', required=False, aliases=['city']),
+        st=dict(
+            type='str', required=False),
+        postalcode=dict(
+            type='str', required=False),
+        telephonenumber=dict(
+            type='list', required=False, aliases=['phone']),
+        mobile=dict(
+            type='list', required=False),
+        pager=dict(
+            type='list', required=False),
+        fax=dict(
+            type='list', required=False),
+        orgunit=dict(
+            type='str', required=False),
+        title=dict(
+            type='str', required=False),
+        manager=dict(
+            type='str', required=False),
+        carlicense=dict(
+            type='str', required=False),
+        ipasshpubkey=dict(
+            type='str', required=False, aliases=['sshpubkey']),
+        user_auth_type=dict(
+            type='str', required=False, choices=['password', 'radius', 'otp']),
+        category=dict(
+            type='str', required=False, aliases=['class']),
+        radius=dict(
+            type='str', required=False),
+        radius_username=dict(
+            type='str', required=False),
+        departmentnumber=dict(
+            type='str', required=False),
+        employeenumber=dict(
+            type='str', required=False),
+        employeetype=dict(
+            type='str', required=False),
+        preferredlanguage=dict(
+            type='str', required=False),
 
-    def user_mod(self, name, item):
-        return self._post_json(method='user_mod', name=name, item=item)
+        # enable/disable
+        nsaccountlock=dict(
+            type='bool', default=False),
 
-    def user_del(self, name):
-        return self._post_json(method='user_del', name=name)
+        # add/remove_cert
+        usercertificate=dict(
+            type='list', required=False, aliases=['certificate']),
 
-    def user_disable(self, name):
-        return self._post_json(method='user_disable', name=name)
-
-    def user_enable(self, name):
-        return self._post_json(method='user_enable', name=name)
-
-
-def get_user_dict(displayname=None, givenname=None, loginshell=None, mail=None, nsaccountlock=False, sn=None,
-                  sshpubkey=None, telephonenumber=None, title=None, userpassword=None):
-    user = {}
-    if displayname is not None:
-        user['displayname'] = displayname
-    if givenname is not None:
-        user['givenname'] = givenname
-    if loginshell is not None:
-        user['loginshell'] = loginshell
-    if mail is not None:
-        user['mail'] = mail
-    user['nsaccountlock'] = nsaccountlock
-    if sn is not None:
-        user['sn'] = sn
-    if sshpubkey is not None:
-        user['ipasshpubkey'] = sshpubkey
-    if telephonenumber is not None:
-        user['telephonenumber'] = telephonenumber
-    if title is not None:
-        user['title'] = title
-    if userpassword is not None:
-        user['userpassword'] = userpassword
-
-    return user
-
-
-def get_user_diff(client, ipa_user, module_user):
-    """
-        Return the keys of each dict whereas values are different. Unfortunately the IPA
-        API returns everything as a list even if only a single value is possible.
-        Therefore some more complexity is needed.
-        The method will check if the value type of module_user.attr is not a list and
-        create a list with that element if the same attribute in ipa_user is list. In this way I hope that the method
-        must not be changed if the returned API dict is changed.
-    :param ipa_user:
-    :param module_user:
-    :return:
-    """
-    # sshpubkeyfp is the list of ssh key fingerprints. IPA doesn't return the keys itself but instead the fingerprints.
-    # These are used for comparison.
-    sshpubkey = None
-    if 'ipasshpubkey' in module_user:
-        module_user['sshpubkeyfp'] = [get_ssh_key_fingerprint(pubkey) for pubkey in module_user['ipasshpubkey']]
-        # Remove the ipasshpubkey element as it is not returned from IPA but save it's value to be used later on
-        sshpubkey = module_user['ipasshpubkey']
-        del module_user['ipasshpubkey']
-
-    result = client.get_diff(ipa_data=ipa_user, module_data=module_user)
-
-    # If there are public keys, remove the fingerprints and add them back to the dict
-    if sshpubkey is not None:
-        del module_user['sshpubkeyfp']
-        module_user['ipasshpubkey'] = sshpubkey
-    return result
-
-
-def get_ssh_key_fingerprint(ssh_key):
-    """
-    Return the public key fingerprint of a given public SSH key
-    in format "FB:0C:AC:0A:07:94:5B:CE:75:6E:63:32:13:AD:AD:D7 [user@host] (ssh-rsa)"
-    :param ssh_key:
-    :return:
-    """
-    parts = ssh_key.strip().split()
-    if len(parts) == 0:
-        return None
-    key_type = parts[0]
-    key = base64.b64decode(parts[1].encode('ascii'))
-
-    fp_plain = hashlib.md5(key).hexdigest()
-    key_fp = ':'.join(a + b for a, b in zip(fp_plain[::2], fp_plain[1::2])).upper()
-    if len(parts) < 3:
-        return "%s (%s)" % (key_fp, key_type)
-    else:
-        user_host = parts[2]
-        return "%s %s (%s)" % (key_fp, user_host, key_type)
-
-
-def ensure(module, client):
-    state = module.params['state']
-    name = module.params['name']
-    nsaccountlock = state == 'disabled'
-
-    module_user = get_user_dict(displayname=module.params.get('displayname'),
-                                givenname=module.params.get('givenname'),
-                                loginshell=module.params['loginshell'],
-                                mail=module.params['mail'], sn=module.params['sn'],
-                                sshpubkey=module.params['sshpubkey'], nsaccountlock=nsaccountlock,
-                                telephonenumber=module.params['telephonenumber'], title=module.params['title'],
-                                userpassword=module.params['password'])
-
-    ipa_user = client.user_find(name=name)
-
-    changed = False
-    if state in ['present', 'enabled', 'disabled']:
-        if not ipa_user:
-            changed = True
-            if not module.check_mode:
-                ipa_user = client.user_add(name=name, item=module_user)
-        else:
-            diff = get_user_diff(client, ipa_user, module_user)
-            if len(diff) > 0:
-                changed = True
-                if not module.check_mode:
-                    ipa_user = client.user_mod(name=name, item=module_user)
-    else:
-        if ipa_user:
-            changed = True
-            if not module.check_mode:
-                client.user_del(name)
-
-    return changed, ipa_user
-
-
-def main():
-    module = AnsibleModule(
-        argument_spec=dict(
-            displayname=dict(type='str', required=False),
-            givenname=dict(type='str', required=False),
-            loginshell=dict(type='str', required=False),
-            mail=dict(type='list', required=False),
-            sn=dict(type='str', required=False),
-            uid=dict(type='str', required=True, aliases=['name']),
-            password=dict(type='str', required=False, no_log=True),
-            sshpubkey=dict(type='list', required=False),
-            state=dict(type='str', required=False, default='present',
-                       choices=['present', 'absent', 'enabled', 'disabled']),
-            telephonenumber=dict(type='list', required=False),
-            title=dict(type='str', required=False),
-            ipa_prot=dict(type='str', required=False, default='https', choices=['http', 'https']),
-            ipa_host=dict(type='str', required=False, default='ipa.example.com'),
-            ipa_port=dict(type='int', required=False, default=443),
-            ipa_user=dict(type='str', required=False, default='admin'),
-            ipa_pass=dict(type='str', required=True, no_log=True),
-            validate_certs=dict(type='bool', required=False, default=True),
-        ),
-        supports_check_mode=True,
+        # add/remove_principal
+        krbprincipalname = dict(
+            type='list', required=False, aliases=['principal']),
     )
 
-    client = UserIPAClient(module=module,
-                           host=module.params['ipa_host'],
-                           port=module.params['ipa_port'],
-                           protocol=module.params['ipa_prot'])
+    def munge_response_usercertificate(self, response):
+        # Replace dict value with string:
+        # from:  'usercertificate': {'__base64__': 'MIIC[...]QLnA='}
+        #   to:  'usercertificate': 'MIIC[...]QLnA='
+        if 'usercertificate' not in response:  return response
 
-    # If sshpubkey is defined as None than module.params['sshpubkey'] is [None]. IPA itself returns None (not a list).
-    # Therefore a small check here to replace list(None) by None. Otherwise get_user_diff() would return sshpubkey
-    # as different which should be avoided.
-    if module.params['sshpubkey'] is not None:
-        if len(module.params['sshpubkey']) == 1 and module.params['sshpubkey'][0] is "":
-            module.params['sshpubkey'] = None
+        vs = response.pop('usercertificate')
+        certs = response['usercertificate'] = []
+        for v in vs:
+            if isinstance(v,dict) and '__base64__' in v:
+                certs.append(v['__base64__'])
+            else:
+                certs.append(v)
+        return response
 
-    try:
-        client.login(username=module.params['ipa_user'],
-                     password=module.params['ipa_pass'])
-        changed, user = ensure(module, client)
-        module.exit_json(changed=changed, user=user)
-    except Exception:
-        e = get_exception()
-        module.fail_json(msg=str(e))
+    krbprincipal_re = re.compile(r'([^@]*)(@[^@]*)?$')
 
+    def munge_response_krbprincipalname(self, response):
+        # krbprincipalname list:  This list of principal aliases may
+        # include the principal canonical name.  Aliases specified in
+        # this list should avoid touching that value.
 
-if __name__ == '__main__':
-    main()
+        if 'krbprincipalname' not in response:  return response
+
+        # Remove krbcanonicalname from list
+        krbcanonicalname = response.get('krbcanonicalname',None)
+        if krbcanonicalname is not None and \
+           krbcanonicalname in response['krbprincipalname']:
+            response['krbprincipalname'].remove(krbcanonicalname)
+
+        # Turn principal foo@EXAMPLE.COM into foo
+        for i, princ in enumerate(response['krbprincipalname']):
+            m = self.krbprincipal_re.match(princ)
+            if m is not None:
+                response['krbprincipalname'][i] = m.group(1)
+
+        return response
+
+    def munge_response(self, response):
+        response = self.munge_response_usercertificate(response)
+        response = self.munge_response_krbprincipalname(response)
+        return super(UserIPAClient, self).munge_response(response)
+
+    def handle_cert(self):
+        # Use user_add/remove_cert methods for certs
+        for from_list, method in (
+                ('list_add', 'user_add_cert'),
+                ('list_del', 'user_remove_cert')):
+            certs = self.diffs[from_list].get('usercertificate',None)
+
+            # If no changes needed, do nothing
+            if certs is None:  continue
+
+            # Mark object changed
+            self.changed = True
+
+            # If in check mode, do nothing
+            if self.module.check_mode:  continue
+
+            # Construct request
+            request = dict(
+                method = method,
+                name = self.mod_request_params(),
+                item = dict(
+                    all = True,
+                    usercertificate = [ {'__base64__': c} for c in certs ]))
+
+            self.requests.append(dict(
+                name = method,
+                request = request ))
+
+    def handle_principal(self):
+        # Use user_add/remove_principal methods for principals
+        for from_list, method in (
+                ('list_add', 'user_add_principal'),
+                ('list_del', 'user_remove_principal')):
+            princs = self.diffs[from_list].get('krbprincipalname',None)
+
+            # If no changes needed, do nothing
+            if princs is None:  continue
+
+            # Mark object changed
+            self.changed = True
+
+            # If in check mode, do nothing
+            if self.module.check_mode:  continue
+
+            # Construct request
+            request = dict(
+                method = method,
+                name = self.mod_request_params(extra_vals = [princs]),
+                item = dict( all = True ))
+
+            self.requests.append(dict(
+                name = method,
+                request = request ))
+
