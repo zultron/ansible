@@ -185,7 +185,7 @@ class AbstractTestClass(object):
         pprint(getattr(client1,'canon_params',
                        '   canon_params not initialized'))
         print "\n*** Cleaned response: ***"
-        pprint(client1.response_cleaned)
+        pprint(getattr(client1,'response_cleaned','(No response_cleaned attr)'))
         for i in range(client1._post_json.call_count):
             if client1._post_json.call_count > i:
                 try:
@@ -286,7 +286,8 @@ class AbstractTestClass(object):
         print "--- Response:"
         pprint(client2.requests[0]['response'])
         print "--- Response cleaned:"
-        pprint(client2.requests[0]['response_cleaned'])
+        pprint(client2.requests[0].get(
+            'response_cleaned','(No response_cleaned key)'))
         print "--- Cleaned module params:"
         pprint(client1.canon_params)
         print "--- Diffs:"
