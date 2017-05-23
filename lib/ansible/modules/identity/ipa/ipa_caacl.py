@@ -174,11 +174,12 @@ class CAACLIPAClient(EnablableIPAClient):
                                      ('list_del','remove')):
             # Methods e.g. caacl_add_host have parameters e.g. user
             # and group
-            for method_item, attrs in (('user',('user','group')),
-                                    ('host',('host','hostgroup')),
-                                    ('profile',('certprofile',)),
-                                    ('ca',('ca',)),
-                                    ('service',('service',))):
+            for method_item, attrs in (
+                    ('user',('user','group')),
+                    ('host',('host','hostgroup')),
+                    ('profile',('certprofile',)),
+                    ('ca',('ca',)),
+                    ('service',('service',))):
                 # Construct request item
                 item = {}
                 for attr in attrs:
@@ -212,57 +213,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-
-
-# ipa: INFO: Request: {
-#     "id": 0, 
-#     "method": "caacl_remove_user/1", 
-#     "params": [
-#         [
-#             "user_cert_acl"
-#         ], 
-#         {
-#             "all": true, 
-#             "group": [
-#                 "editors"
-#             ], 
-#             "version": "2.213"
-#         }
-#     ]
-# }
-
-
-# ipa: INFO: Request: {
-#     "id": 0,
-#     "method": "caacl_add_user/1",
-#     "params": [
-#         [
-#             "user_cert_acl"
-#         ],  
-#         {
-#             "all": true,
-#             "group": [
-#                 "editors"
-#             ],  
-#             "version": "2.213"
-#         }   
-#     ]   
-# }   
-
-# ipa: INFO: Request: {
-#     "id": 0,  
-#     "method": "caacl_add_profile/1", 
-#     "params": [
-#         [
-#             "user_cert_acl"
-#         ], 
-#         {
-#             "all": true, 
-#             "certprofile": [
-#                 "IECUserRoles"
-#             ], 
-#             "version": "2.213"
-#         }
-#     ]
-# }
-
