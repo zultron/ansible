@@ -287,6 +287,10 @@ class IPAClient(object):
                and isinstance(val, basestring):
                 if val.lower() == 'true': val = True
                 elif val.lower() == 'false': val = False
+            # Convert strings to integers
+            if self.param_data[key]['type'] == 'int' \
+               and isinstance(val, basestring):
+                val = int(val)
             # Add key:val to item
             item[key] = val
         return item
