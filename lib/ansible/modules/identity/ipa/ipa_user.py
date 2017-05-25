@@ -102,9 +102,6 @@ options:
     required: false
     default: true
 version_added: "2.3"
-requirements:
-- base64
-- hashlib
 '''
 
 EXAMPLES = '''
@@ -141,8 +138,6 @@ user:
   type: dict
 '''
 
-import base64
-import hashlib
 import re
 
 from ansible.module_utils.ipa import EnablableIPAClient
