@@ -140,149 +140,75 @@ group:
   type: dict
 '''
 
-from ansible.module_utils.basic import AnsibleModule
-from ansible.module_utils.pycompat24 import get_exception
 from ansible.module_utils.ipa import IPAClient
 
 
 class GroupIPAClient(IPAClient):
-    def __init__(self, module, host, port, protocol):
-        super(GroupIPAClient, self).__init__(module, host, port, protocol)
+    name = 'group'
 
-    def group_find(self, name):
-        return self._post_json(method='group_find', name=None, item={'all': True, 'cn': name})
+    param_keys = set(['cn'])
+    base_keys = set([
+        'description', 'gidnumber', 'nonposix', 'external',
+    ])
+    change_functions = tuple(
+        list(IPAClient.change_functions) +
+        ['handle_members'] )
 
-    def group_add(self, name, item):
-        return self._post_json(method='group_add', name=name, item=item)
+    kw_args = dict(
+        cn=dict(
+            type='str', required=True, aliases=['name']),
+        description=dict(
+            type='str', required=False),
+        gidnumber=dict(
+            type='int', required=False, aliases=['gid']),
+        nonposix=dict(
+            type='bool', required=False),
+        external=dict(
+            type='bool', required=False),
+        member_group=dict(
+            type='list', required=False, aliases=['group']),
+        member_user=dict(
+            type='list', required=False, aliases=['user']),
+    )
 
-    def group_mod(self, name, item):
-        return self._post_json(method='group_mod', name=name, item=item)
+    def handle_members(self):
+        # Use group_add/remove_member method for user/group members
 
-    def group_del(self, name):
-        return self._post_json(method='group_del', name=name)
+        for from_list, method in (
+                ('list_add', 'group_add_member'),
+                ('list_del', 'group_remove_member')):
+            users = self.diffs[from_list].get('member_user',None)
+            groups = self.diffs[from_list].get('member_group',None)
 
-    def group_add_member(self, name, item):
-        return self._post_json(method='group_add_member', name=name, item=item)
+            # If no changes needed, do nothing
+            if users is None and groups is None:  continue
 
-    def group_add_member_group(self, name, item):
-        return self.group_add_member(name=name, item={'group': item})
+            # Mark object changed
+            self.changed = True
 
-    def group_add_member_user(self, name, item):
-        return self.group_add_member(name=name, item={'user': item})
+            # If in check mode, do nothing
+            if self.module.check_mode:  continue
 
-    def group_remove_member(self, name, item):
-        return self._post_json(method='group_remove_member', name=name, item=item)
+            # Construct request
+            item = dict( all = True )
+            if users is not None:
+                item['user'] = users
+            if groups is not None:
+                item['group'] = groups
 
-    def group_remove_member_group(self, name, item):
-        return self.group_remove_member(name=name, item={'group': item})
+            request = dict(
+                method = method,
+                name = self.mod_request_params(),
+                item = item)
 
-    def group_remove_member_user(self, name, item):
-        return self.group_remove_member(name=name, item={'user': item})
+            self.requests.append(dict(
+                name = method,
+                request = request ))
 
-
-def get_group_dict(description=None, external=None, gid=None, nonposix=None):
-    group = {}
-    if description is not None:
-        group['description'] = description
-    if external is not None:
-        group['external'] = external
-    if gid is not None:
-        group['gidnumber'] = gid
-    if nonposix is not None:
-        group['nonposix'] = nonposix
-    return group
-
-
-def get_group_diff(client, ipa_group, module_group):
-    data = []
-    # With group_add attribute nonposix is passed, whereas with group_mod only posix can be passed.
-    if 'nonposix' in module_group:
-        # Only non-posix groups can be changed to posix
-        if not module_group['nonposix'] and ipa_group.get('nonposix'):
-            module_group['posix'] = True
-        del module_group['nonposix']
-
-    return client.get_diff(ipa_data=ipa_group, module_data=module_group)
-
-
-def ensure(module, client):
-    state = module.params['state']
-    name = module.params['name']
-    group = module.params['group']
-    user = module.params['user']
-
-    module_group = get_group_dict(description=module.params['description'], external=module.params['external'],
-                                  gid=module.params['gidnumber'], nonposix=module.params['nonposix'])
-    ipa_group = client.group_find(name=name)
-
-    changed = False
-    if state == 'present':
-        if not ipa_group:
-            changed = True
-            if not module.check_mode:
-                ipa_group = client.group_add(name, item=module_group)
-        else:
-            diff = get_group_diff(client, ipa_group, module_group)
-            if len(diff) > 0:
-                changed = True
-                if not module.check_mode:
-                    data = {}
-                    for key in diff:
-                        data[key] = module_group.get(key)
-                    client.group_mod(name=name, item=data)
-
-        if group is not None:
-            changed = client.modify_if_diff(name, ipa_group.get('member_group', []), group,
-                                            client.group_add_member_group,
-                                            client.group_remove_member_group) or changed
-
-        if user is not None:
-            changed = client.modify_if_diff(name, ipa_group.get('member_user', []), user,
-                                            client.group_add_member_user,
-                                            client.group_remove_member_user) or changed
-
-    else:
-        if ipa_group:
-            changed = True
-            if not module.check_mode:
-                client.group_del(name)
-
-    return changed, client.group_find(name=name)
 
 
 def main():
-    module = AnsibleModule(
-        argument_spec=dict(
-            cn=dict(type='str', required=True, aliases=['name']),
-            description=dict(type='str', required=False),
-            external=dict(type='bool', required=False),
-            gidnumber=dict(type='str', required=False, aliases=['gid']),
-            group=dict(type='list', required=False),
-            nonposix=dict(type='bool', required=False),
-            state=dict(type='str', required=False, default='present', choices=['present', 'absent']),
-            user=dict(type='list', required=False),
-            ipa_prot=dict(type='str', required=False, default='https', choices=['http', 'https']),
-            ipa_host=dict(type='str', required=False, default='ipa.example.com'),
-            ipa_port=dict(type='int', required=False, default=443),
-            ipa_user=dict(type='str', required=False, default='admin'),
-            ipa_pass=dict(type='str', required=True, no_log=True),
-            validate_certs=dict(type='bool', required=False, default=True),
-        ),
-        supports_check_mode=True,
-    )
-
-    client = GroupIPAClient(module=module,
-                            host=module.params['ipa_host'],
-                            port=module.params['ipa_port'],
-                            protocol=module.params['ipa_prot'])
-    try:
-        client.login(username=module.params['ipa_user'],
-                     password=module.params['ipa_pass'])
-        changed, group = ensure(module, client)
-        module.exit_json(changed=changed, group=group)
-    except Exception:
-        e = get_exception()
-        module.fail_json(msg=str(e))
+    client = GroupIPAClient().main()
 
 
 if __name__ == '__main__':
