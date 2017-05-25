@@ -206,7 +206,6 @@ class IPAClient(object):
     def _post_json(self, method, name, item=None, item_filter=None):
         url = '%s/session/json' % self.get_base_url()
         data = {'method': method, 'params': [name, item]}
-        from pprint import pprint; print "data:"; pprint(data)
         try:
             resp, info = fetch_url(
                 module=self.module, url=url,
@@ -229,7 +228,6 @@ class IPAClient(object):
         resp = json.loads(to_text(resp.read(), encoding=charset),
                           encoding=charset)
         err = resp.get('error')
-        from pprint import pprint; print "resp:"; pprint(resp); print "err:"; pprint(err)
         if err is not None:
             self._fail('response %s' % method, err)
 
