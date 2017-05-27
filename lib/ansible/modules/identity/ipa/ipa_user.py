@@ -342,3 +342,9 @@ class UserIPAClient(EnablableIPAClient):
                 name = method,
                 request = request ))
 
+
+def main():
+    UserIPAClient().main()
+
+if __name__ == '__main__':
+    main()
