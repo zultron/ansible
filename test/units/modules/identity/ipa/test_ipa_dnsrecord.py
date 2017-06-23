@@ -185,9 +185,49 @@ class TestDNSRecordIPAClient(unittest.TestCase, AbstractTestClass):
             ],
         )
 
-    def test_14_dnsrecord_existing_absent_object(self):
+    def test_14_dnsrecord_existing_remove_noop(self):
+        self.test_changed = False
         self.runner(
             test_key = 14,
+            module_params = dict(
+                zone = self.ipa_domain,
+                idnsname = "host1",
+                state = "absent",                             # Absent:
+                arecord = [ "192.168.43.38" ],                # Noop
+            ),
+            post_json_calls = [
+                dict(
+                    name = 'find existing object',
+                    request = self.find_request,
+                ),
+                # No add/mod operation
+                # No enable/disable operation
+            ],
+        )
+
+    def test_15_dnsrecord_existing_add_noop(self):
+        self.test_changed = False
+        self.runner(
+            test_key = 15,
+            module_params = dict(
+                zone = self.ipa_domain,
+                idnsname = "host1",
+                state = "present",                            # Present:
+                arecord = [ "192.168.42.39" ],                # Noop
+            ),
+            post_json_calls = [
+                dict(
+                    name = 'find existing object',
+                    request = self.find_request,
+                ),
+                # No add/mod operation
+                # No enable/disable operation
+            ],
+        )
+
+    def test_16_dnsrecord_existing_absent_object(self):
+        self.runner(
+            test_key = 16,
             module_params = dict(
                 zone = self.ipa_domain,
                 idnsname = "host1",

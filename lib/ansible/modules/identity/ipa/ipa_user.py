@@ -152,7 +152,7 @@ class UserIPAClient(EnablableIPAClient):
     param_keys = set(['uid'])
     base_keys = set([
         'givenname', 'sn', 'cn', 'displayname', 'initials', 'homedirectory',
-        'gecos', 'loginshell', 'mail', 'password', 'gidnumber',
+        'gecos', 'loginshell', 'mail', 'userpassword', 'gidnumber',
         'street', 'l', 'st', 'postalcode',
         'telephonenumber', 'mobile', 'pager', 'fax',
         'orgunit', 'title', 'manager', 'carlicense', 'ipasshpubkey',
@@ -165,7 +165,7 @@ class UserIPAClient(EnablableIPAClient):
 
     kw_args = dict(
         uid=dict(
-            type='str', required=True),
+            type='str', required=True, aliases=['name']),
         # Base add/mod keys
         givenname=dict(
             type='str', required=False, aliases=['first']),
@@ -185,8 +185,8 @@ class UserIPAClient(EnablableIPAClient):
             type='str', required=False, aliases=['shell']),
         mail=dict(
             type='list', required=False, aliases=['email']),
-        password=dict(
-            type='str', required=False, no_log=True),
+        userpassword=dict(
+            type='str', required=False, aliases=['password'], no_log=True),
         gidnumber=dict(
             type='int', required=False),
         street=dict(

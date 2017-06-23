@@ -52,7 +52,7 @@ class AbstractTestClass(object):
             ipa_pass = cls.ipa_pass))
         mod.params['ipa_prot'] = 'https'
         # The fail_json() method must raise an exception
-        def raise_exception(msg):  raise IPATestError(msg)
+        def raise_exception(msg, **kwargs):  raise IPATestError(msg, kwargs)
         mod.fail_json = MagicMock(side_effect=raise_exception)
 
         # Create test class instance
@@ -77,6 +77,10 @@ class AbstractTestClass(object):
         else:
             mock_post_json = MagicMock(
                 side_effect=reply_list)
+            # Make exists() property work correctly despite mocked _post_json()
+            if reply_list:
+                client.responses[client._methods['find']] = {
+                    'result':{'count': (1 if reply_list[0] else 0)}}
         client._post_json = mock_post_json
 
         return client
@@ -242,7 +246,10 @@ class AbstractTestClass(object):
             self.assertEqual(request_expected,request_actual)
 
         # - Changed
-        self.assertTrue(client1.changed)
+        if getattr(self,"test_changed",True) is True:
+            self.assertTrue(client1.changed)
+        else:
+            self.assertFalse(client1.changed)
 
         # - Save instance for later tests
         self.persist_client(client1)
@@ -313,6 +320,7 @@ class AbstractTestClass(object):
         self.assertEqual(client2._post_json.call_count, 1)
         print "\n*** SUCCESS"
 
+        return client1
 
 class AbstractEnablableTestClass(AbstractTestClass):
 
