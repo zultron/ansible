@@ -50,6 +50,7 @@ class TestCertIPAClient(unittest.TestCase, AbstractTestClass):
         name=[],
         item=dict(all = True,
                   subject = user_name,
+                  exactly = True,
                   cacn = ca_name),
     )
 
@@ -98,9 +99,6 @@ class TestCertIPAClient(unittest.TestCase, AbstractTestClass):
                 cacn = self.ca_name,
                 req = self.req,
                 state = "present",
-                ipa_host = self.ipa_host,
-                ipa_user = "admin",
-                ipa_pass = "secretpass",
             ),
             post_json_calls = [
                 dict(
@@ -142,9 +140,6 @@ class TestCertIPAClient(unittest.TestCase, AbstractTestClass):
                 state = "absent",  # Revoke
                 serial_number = sn,
                 revocation_reason = 4, # (superceded)
-                ipa_host = self.ipa_host,
-                ipa_user = "admin",
-                ipa_pass = "secretpass",
             ),
             post_json_calls = [
                 dict(
@@ -157,6 +152,7 @@ class TestCertIPAClient(unittest.TestCase, AbstractTestClass):
                                   cacn = self.ca_name,
                                   max_serial_number = sn,
                                   min_serial_number = sn,
+                                  exactly = True,
                               ),
                     ),
                 ),
@@ -171,5 +167,30 @@ class TestCertIPAClient(unittest.TestCase, AbstractTestClass):
                     reply = {},
                 ),
                 # No enable/disable operation
+            ],
+        )
+
+    def test_12_cert_cacert(self):
+        self.test_changed = False
+        self.runner(
+            test_key = 12,
+            module_params = dict(
+                principal = "Certificate Authority",
+                cacn = "ipa",
+                state = "present",
+            ),
+            post_json_calls = [
+                dict(
+                    name = 'find CA cert',
+                    request = dict(
+                        method='cert_find',
+                        name=[],
+                        item=dict(all = True,
+                                  subject = "Certificate Authority",
+                                  cacn = "ipa",
+                                  exactly = True,
+                              ),
+                    ),
+                ),
             ],
         )
