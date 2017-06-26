@@ -14,36 +14,34 @@ class TestCertIPAClient(unittest.TestCase, AbstractTestClass):
     # Track state from test to test
     current_state = {}
 
-    # Fake cert and req data
+    # cert:  completely bogus; not used in live IPA test
     cert = 'LS0tLUZBS0UgQ0VSVCBEQVRBLS0tLQo='
-    # echo -ne "\n\n\n\n\ntest_user\ntest_user@example.com\n\n\n" | \
-    #     openssl req -nodes -newkey rsa:2048 -rand /dev/urandom \
-    #         -keyout key.pem -out req.pem -days 365
+    # req:  must be legit (enough)
+    # - generate:
+    # echo -ne "\n\n\n\n\ntest_cert_user\ntest_cert_user@example.com\n\n\n" | \
+    #     openssl req -nodes -newkey rsa:1024 -rand /dev/urandom \
+    #         -keyout /dev/null -out req.pem -days 3650 >/dev/null
+    # - check:
     # openssl req -in req.pem -noout -text
     req = '''
         -----BEGIN CERTIFICATE REQUEST-----
-        MIICxDCCAawCAQAwfzELMAkGA1UEBhMCQVUxEzARBgNVBAgMClNvbWUtU3RhdGUx
-        ITAfBgNVBAoMGEludGVybmV0IFdpZGdpdHMgUHR5IEx0ZDESMBAGA1UEAwwJdGVz
-        dF91c2VyMSQwIgYJKoZIhvcNAQkBFhV0ZXN0X3VzZXJAZXhhbXBsZS5jb20wggEi
-        MA0GCSqGSIb3DQEBAQUAA4IBDwAwggEKAoIBAQDXNHC+SvXPCeLtVmNPCrTcPlDm
-        S+RHVewpjAZygagfx8Nt7dthmVDyJ6XVD6dzi2lQ7RQ4lN0BGzDqH60YIT59cyKg
-        5tKMNyrWd3xonKdL4cKvtY6GmEAfJiundx7iWJCz1P1JIOSam2Hr2TnVd3UKvvWu
-        /oYKDLeDvk+jUFbAHBc02x5hDFV0iByxHWl1pn4B7F4epesfIXYMW+u5AU3AxsZo
-        knLD3Fvbp0HO4LbsugKrNcScI7Yn5Ft+YhLYw+jH20HKif/hYjkLmrDz4x1Y8oDv
-        51Yj/ZxsmeKZ4vEHvyYqRhWux1gjWHZcC6QvZp8xrkZnNmJq1paigT2BzKtLAgMB
-        AAGgADANBgkqhkiG9w0BAQsFAAOCAQEACF4cLIqvJJUkIeFvKaSCyZ7VnPcEZwKs
-        LKuoaBn/3+WPdK3t7hlV24R7hMJzlDM/dHeVYbOc1/QPeytt00/Gxxc4RcsI1dUz
-        gbgqGfHCTQctbdqCGaC3vdvlhBuFjF5bxhaHCATD/sw1GJATJnvYDoblS6mY756V
-        vlbu6My787BQJg/95VKJKeyV8y2kMdQEPDg/uA2ECCM0JIZQW0ZkXnwopg1/DQha
-        wIlGGm+5AQwGLUGz1Edy55XlgXa9apOIpgE26SQ07mXAx5EtzQcIizH5aP7vWXS2
-        vQwO7s5kOWs1M6kmzhQW0HemGkHQN7GNb7EFsrxCguF4XxBtqnVW3Q==
+        MIIByjCCATMCAQAwgYkxCzAJBgNVBAYTAkFVMRMwEQYDVQQIDApTb21lLVN0YXRl
+        MSEwHwYDVQQKDBhJbnRlcm5ldCBXaWRnaXRzIFB0eSBMdGQxFzAVBgNVBAMMDnRl
+        c3RfY2VydF91c2VyMSkwJwYJKoZIhvcNAQkBFhp0ZXN0X2NlcnRfdXNlckBleGFt
+        cGxlLmNvbTCBnzANBgkqhkiG9w0BAQEFAAOBjQAwgYkCgYEA1aYto6IRPAnRGqfG
+        neJ4EcMS4vdmDBxCvm/V1eu6TDem54ozK01EvpKbmK6YpsXeIdAYA3lQT2HQKhFG
+        f1ZoWdI0Pb/2KjONQEimid5WRrWXz91KTAwNiXAAp/ukmMCy+iKRvWwKB5uBDVFz
+        o8GB6BXn1J9qebEXhWUvfSi+uVkCAwEAAaAAMA0GCSqGSIb3DQEBCwUAA4GBAFIa
+        t60hMLIKXwP/UtYJz00C/KO6scXutc8Uusly2vf9F/Rj6V7D3+HDMWXwjE4Brm/2
+        hai19ENC9F3hKCf6azA/8DC+EqaPxl934sGN94LCLwjb8RsD9LnC8WXWfcFsux4a
+        8rGirj2cun92hSYbDUt9iG74SpzKgdK3q7nBTVsC
         -----END CERTIFICATE REQUEST-----
-        '''
+    '''
 
     # Test CA name
     ca_name = 'test_cert_ca'
     # Test user name
-    user_name = 'test_user'
+    user_name = 'test_cert_user'
 
     find_request = dict(
         method='cert_find',
@@ -132,6 +130,9 @@ class TestCertIPAClient(unittest.TestCase, AbstractTestClass):
 
     def test_11_cert_absent_revoke(self):
         sn = self.current_state.get('cert_sn', None)
+        if sn is None:
+            raise unittest.SkipTest(
+                "Certificate serial number not available")
         self.runner(
             test_key = 11,
             module_params = dict(
