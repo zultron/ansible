@@ -109,7 +109,6 @@ caacl:
   type: dict
 '''
 
-from ansible.module_utils.pycompat24 import get_exception
 from ansible.module_utils.ipa import EnablableIPAClient
 
 class CAACLIPAClient(EnablableIPAClient):
