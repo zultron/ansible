@@ -119,18 +119,18 @@ class ServiceIPAClient(IPAClient):
         krbcanonicalname = dict(
             type='str', required=True, aliases=['name']),
         usercertificate = dict(
-            type='str', required=False),
+            type='str', required=False, aliases=['certificate']),
         krbprincipalauthind = dict(
-            type='str', required=False),
+            type='str', required=False, aliases=['auth_ind']),
 
         # The next three booleans are bits broken out of the
         # krbticketflags param; see filter_value() and request_cleanup()
         ipakrbrequirespreauth = dict(
-            type='bool', required=False),
+            type='bool', default=True, aliases=['requires_pre_auth']),
         ipakrbokasdelegate = dict(
-            type='bool', required=False),
+            type='bool', default=False, aliases=['ok_as_delegate']),
         ipakrboktoauthasdelegate = dict(
-            type='bool', required=False),
+            type='bool', default=False, aliases=['ok_to_auth_as_delegate']),
 
         # service-add-principal CANONICAL-PRINCIPAL PRINCIPAL...
         krbprincipalname = dict(
