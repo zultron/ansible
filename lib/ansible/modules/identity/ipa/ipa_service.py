@@ -177,6 +177,11 @@ class ServiceIPAClient(IPAClient):
             type='list', required=False),
     )
 
+    def munge_module_params(self):
+        item = super(ServiceIPAClient, self).munge_module_params()
+        self.directory_base_dn = item.pop('directory_base_dn',None)
+        return item
+
     def munge_response_usercertificate(self, response):
         # Replace dict value with string:
         # from:  'usercertificate': {'__base64__': 'MIIC[...]QLnA='}
@@ -304,7 +309,6 @@ class ServiceIPAClient(IPAClient):
             request['item']['delattr'].pop('krbticketflags',None)
 
         # ipaAllowedToPerform;(read|write)_keys:
-        directory_base_dn = self.module.params.get('directory_base_dn',None)
         dn_pat = '%s=%s,cn=%s,cn=accounts,%s'
         type_map = dict(users='uid', groups='cn', hosts='fqdn', hostgroups='cn')
         for thing in ('users', 'groups', 'hosts', 'hostgroups'):
@@ -315,14 +319,14 @@ class ServiceIPAClient(IPAClient):
                                request['item']['delattr']):
                     if key not in req_op: continue
                     # directory_base_dn must be defined
-                    if directory_base_dn is None:
+                    if self.directory_base_dn is None:
                         self._fail(key, 'directory_base_dn param undefined')
                     # Patch values into ipaallowedtoperform;read/write_keys
                     dest_key = 'ipaallowedtoperform;%s_keys'%perm
                     for val in req_op.pop(key):
                         req_op.setdefault(dest_key,[]).append(
                             dn_pat % (type_map[thing], val, thing_trans,
-                                      directory_base_dn))
+                                      self.directory_base_dn))
 
         # host -> managedby:
         for act_key, acts in request['item'].items():
