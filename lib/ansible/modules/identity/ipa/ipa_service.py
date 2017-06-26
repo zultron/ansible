@@ -117,8 +117,7 @@ class ServiceIPAClient(IPAClient):
 
     kw_args = dict(
         krbcanonicalname = dict(
-            type='str', required=True, aliases=['name'],
-            when=['find'], when_name=['add', 'mod', 'rem']),
+            type='str', required=True, aliases=['name']),
         usercertificate = dict(
             type='str', required=False),
         krbprincipalauthind = dict(
@@ -150,7 +149,7 @@ class ServiceIPAClient(IPAClient):
         # ipaAllowedToPerform;read_keys:
         #     fqdn=host1.example.com,cn=computers,cn=accounts,dc=example,dc=com
         directory_base_dn = dict(
-            type='str', required=False, when=[]),
+            type='str', required=False),
 
         # managedby attribute value
         host = dict(type='list', required=False),

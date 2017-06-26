@@ -135,7 +135,6 @@ class IPAClient(object):
             spec = spec_orig.copy()
             self.param_data[name] = dict(
                 type = spec['type'],
-                when = spec.pop('when', ['add','mod']),
                 value_filter_func = spec.pop('value_filter_func', None),
                 value_filter_re = (re.compile(spec.pop('value_filter_re')) \
                                    if 'value_filter_re' in spec else None),
@@ -302,13 +301,6 @@ class IPAClient(object):
             item[key] = val
         return item
 
-    def filter_params_on_when(self, item, when):
-        item = item.copy()
-        for key in item.keys():
-            if when not in self.param_data.get(key,{}).get('when',[]):
-                item.pop(key)
-        return item
-
     #######################################################
     # diffs
 
@@ -325,12 +317,6 @@ class IPAClient(object):
         keys = set(self.param_data.keys())
         res = {}
         for key in set(a) | set(b):
-            # if key not in self.param_data: continue
-            # FIXME can we treat scalars this way?
-            # if self.param_data[key]['type'] != 'list': continue
-            # FIXME
-            # if 'add' not in self.param_data[key]['when']: continue
-            # => res_val = a[key] <op> b[key]
             res_val = list(getattr(set(a.get(key, [])), op)(set(b.get(key, []))))
             if res_val: res.setdefault(key,[]).extend(res_val)
         return res

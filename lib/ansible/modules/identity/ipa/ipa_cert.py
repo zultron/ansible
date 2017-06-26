@@ -133,7 +133,7 @@ class CertIPAClient(IPAClient):
         # "revoke" params
         serial_number =     dict(type='str', required=False),
         revocation_reason = dict(type='int', required=False,
-                                 when=['rem'], choices=range(11)),
+                                 choices=range(11)),
     )
 
     def mod_request_params(self):
