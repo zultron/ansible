@@ -356,14 +356,18 @@ class IPAClient(object):
             if self.state == 'exact':
                 # Deleted scalar keys
                 scalar_keys |= (set(curr_slice['scalar'].keys()) -
-                                set(change_slice['scalar'].keys()))
+                                (set(change_slice['scalar'].keys()) |
+                                 set([k for k in self.argument_spec
+                                      if 'default' in self.argument_spec[k]])))
             for k in scalar_keys:
-                changes['scalars'][k] = change_params.get(k,None)
+                changes['scalars'][k] = change_params.get(
+                    k,self.argument_spec[k].get('default',None))
         if self.state == 'absent':
             for k in change_slice['scalar']:
                 if change_slice['scalar'][k] == \
                    curr_slice['scalar'].get(k,None):
-                    changes['scalars'][k] = None
+                    changes['scalars'][k] = self.argument_spec[k].get(
+                        'default',None)
 
         return changes
 
@@ -373,9 +377,19 @@ class IPAClient(object):
     #########
     # module params
 
+    def munge_state_exact_add_defaults(self, item):
+        if self.state != 'exact':
+            return item
+        for k, v in self.argument_spec.items():
+            if k in item:  continue
+            if 'default' not in v:  continue
+            item[k] = v['default']
+        return item
+
     def munge_module_params(self):
         item = self.clean(self.module.params)
         item = self.munge_pop_request_keys(item)
+        item = self.munge_state_exact_add_defaults(item)
         return item
 
     #########
