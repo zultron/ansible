@@ -327,13 +327,18 @@ class IPAClient(object):
         curr_slice = self.get_slice(curr_params)
 
         changes = dict(scalars = {}, list_add = {}, list_del = {})
+
+        # Compute changes for list parameters
         if self.state != 'absent':
+            # Calculate values to add:  desired state - current state
             changes['list_add'].update(
                 self.op(change_slice['list'], curr_slice['list'], 'difference'))
         if self.state == 'exact':
+            # Calculate values to remove:  current state - desired state
             changes['list_del'].update(
                 self.op(curr_slice['list'], change_slice['list'], 'difference'))
         if self.state == 'absent':
+            # Calculate values to remove:  desired state & current state
             changes['list_del'].update(
                 self.op(change_slice['list'], curr_slice['list'], 'intersection'))
 
