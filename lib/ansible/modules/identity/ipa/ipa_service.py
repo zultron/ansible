@@ -112,7 +112,20 @@ class ServiceIPAClient(IPAClient):
         show = '{}_show',
         )
 
+    change_functions = tuple(
+        list(IPAClient.change_functions) +
+        ['handle_managedby_host', 'handle_allow_keytab'] )
+
     param_keys = set(('krbcanonicalname',))
+    base_keys = set([
+        'krbcanonicalname', 'usercertificate', 'krbprincipalauthind',
+        'ipakrbrequirespreauth', 'ipakrbokasdelegate',
+        'ipakrboktoauthasdelegate', 'krbprincipalname',
+        'write_keytab_users', 'write_keytab_groups',
+        'write_keytab_hosts', 'write_keytab_hostgroups',
+        'read_keytab_users', 'read_keytab_groups',
+        'read_keytab_hosts', 'read_keytab_hostgroups',
+    ])
 
     kw_args = dict(
         krbcanonicalname = dict(
@@ -151,28 +164,28 @@ class ServiceIPAClient(IPAClient):
             type='str', required=False),
 
         # managedby attribute value
-        host = dict(type='list', required=False),
+        managedby_host = dict(type='list', required=False),
 
         # service-allow-create-keytab users/groups/hosts/hostgroups
         # ipaAllowedToPerform;write_keys:
-        write_keytab_users = dict(
+        ipaallowedtoperform_write_keys_user = dict(
             type='list', required=False),
-        write_keytab_groups = dict(
+        ipaallowedtoperform_write_keys_group = dict(
             type='list', required=False),
-        write_keytab_hosts = dict(
+        ipaallowedtoperform_write_keys_host = dict(
             type='list', required=False),
-        write_keytab_hostgroups = dict(
+        ipaallowedtoperform_write_keys_hostgroup = dict(
             type='list', required=False),
 
         # service-allow-read-keytab  users/groups/hosts/hostgroups
         # ipaAllowedToPerform;read_keys:  as above
-        read_keytab_users = dict(
+        ipaallowedtoperform_read_keys_user = dict(
             type='list', required=False),
-        read_keytab_groups = dict(
+        ipaallowedtoperform_read_keys_group = dict(
             type='list', required=False),
-        read_keytab_hosts = dict(
+        ipaallowedtoperform_read_keys_host = dict(
             type='list', required=False),
-        read_keytab_hostgroups = dict(
+        ipaallowedtoperform_read_keys_hostgroup = dict(
             type='list', required=False),
     )
 
@@ -307,35 +320,90 @@ class ServiceIPAClient(IPAClient):
             request['item']['setattr']['krbticketflags'] = [krbticketflags]
             request['item']['delattr'].pop('krbticketflags',None)
 
-        # ipaAllowedToPerform;(read|write)_keys:
-        dn_pat = '%s=%s,cn=%s,cn=accounts,%s'
-        type_map = dict(users='uid', groups='cn', hosts='fqdn', hostgroups='cn')
-        for thing in ('users', 'groups', 'hosts', 'hostgroups'):
-            for perm in ('read', 'write'):
-                key = '%s_keytab_%s' % (perm, thing)
-                thing_trans = 'computers' if thing == 'hosts' else thing
-                for req_op in (request['item']['addattr'],
-                               request['item']['delattr']):
-                    if key not in req_op: continue
-                    # directory_base_dn must be defined
-                    if self.directory_base_dn is None:
-                        self._fail(key, 'directory_base_dn param undefined')
-                    # Patch values into ipaallowedtoperform;read/write_keys
-                    dest_key = 'ipaallowedtoperform;%s_keys'%perm
-                    for val in req_op.pop(key):
-                        req_op.setdefault(dest_key,[]).append(
-                            dn_pat % (type_map[thing], val, thing_trans,
-                                      self.directory_base_dn))
+        # # ipaAllowedToPerform;(read|write)_keys:
+        # dn_pat = '%s=%s,cn=%s,cn=accounts,%s'
+        # type_map = dict(users='uid', groups='cn', hosts='fqdn', hostgroups='cn')
+        # for thing in ('users', 'groups', 'hosts', 'hostgroups'):
+        #     for perm in ('read', 'write'):
+        #         key = '%s_keytab_%s' % (perm, thing)
+        #         thing_trans = 'computers' if thing == 'hosts' else thing
+        #         for req_op in (request['item']['addattr'],
+        #                        request['item']['delattr']):
+        #             if key not in req_op: continue
+        #             # directory_base_dn must be defined
+        #             if self.directory_base_dn is None:
+        #                 self._fail(key, 'directory_base_dn param undefined')
+        #             # Patch values into ipaallowedtoperform;read/write_keys
+        #             dest_key = 'ipaallowedtoperform;%s_keys'%perm
+        #             for val in req_op.pop(key):
+        #                 req_op.setdefault(dest_key,[]).append(
+        #                     dn_pat % (type_map[thing], val, thing_trans,
+        #                               self.directory_base_dn))
 
-        # host -> managedby:
-        for act_key, acts in request['item'].items():
-            for host in acts.pop('host',[]):
-                if 'directory_base_dn' not in self.module.params:
-                    self._fail('host', 'Must specify directory_base_dn with host')
-                    break
-                acts.setdefault('managedby',[]).append(
-                    'fqdn=%s,cn=computers,cn=accounts,%s' %
-                    (host, self.module.params['directory_base_dn']))
+        # # host -> managedby:
+        # for act_key, acts in request['item'].items():
+        #     for host in acts.pop('host',[]):
+        #         if 'directory_base_dn' not in self.module.params:
+        #             self._fail('host', 'Must specify directory_base_dn with host')
+        #             break
+        #         acts.setdefault('managedby',[]).append(
+        #             'fqdn=%s,cn=computers,cn=accounts,%s' %
+        #             (host, self.module.params['directory_base_dn']))
+
+    def handle_managedby_host(self):
+        # service_add_host/service_remove_host methods
+        for from_list, method in (
+                ('list_add', 'service_add_host'),
+                ('list_del', 'service_remove_host')):
+            hosts = self.diffs[from_list].get('managedby_host',None)
+
+            # If no changes needed, do nothing
+            if hosts is None:  continue
+
+            # If in check mode, do nothing
+            if self.module.check_mode:  continue
+
+            # Construct request
+            request = dict(
+                method = method,
+                name = self.mod_request_params(),
+                item = dict( all = True,
+                             host = hosts ))
+
+            self.requests.append(dict(
+                name = method,
+                request = request ))
+
+    def handle_allow_keytab(self):
+        # service_add_host/service_remove_host methods
+        for from_list, method, r_w in (
+                ('list_add', 'service_allow_create_keytab', 'write'),
+                ('list_del', 'service_disallow_create_keytab', 'write'),
+                ('list_add', 'service_allow_retrieve_keytab', 'read'),
+                ('list_del', 'service_disallow_retrieve_keytab', 'read')):
+            item = dict()
+            for objtype in ('user','group','host','hostgroup'):
+                attr_name = 'ipaallowedtoperform_%s_keys_%s' % (r_w, objtype)
+                attr_val = self.diffs[from_list].get(attr_name, None)
+
+                # If no changes needed, do nothing
+                if attr_val is None:  continue
+
+                item[objtype] = attr_val
+
+            # If no changes in check mode, do nothing
+            if (not item) or self.module.check_mode:  continue
+
+            # Construct and queue request
+            item['all'] = True
+            self.requests.append(dict(
+                name = method,
+                request = dict(
+                    method = method,
+                    name = self.mod_request_params(),
+                    item = item,
+                )))
+
 
 def main():
     client = ServiceIPAClient().main()

@@ -7,7 +7,7 @@ from . import AbstractTestClass
 
 from ansible.modules.identity.ipa.ipa_service import ServiceIPAClient
 
-import os
+import os, re
 
 class TestServiceIPAClient(unittest.TestCase, AbstractTestClass):
 
@@ -16,17 +16,19 @@ class TestServiceIPAClient(unittest.TestCase, AbstractTestClass):
     # Track state from test to test
     current_state = {}
 
-    @property
-    def find_request(self):
-        return dict(
-            method='service_find',
-            name=[None],
-            item=dict(
-                all = True,
-                krbcanonicalname = 'test/%s@%s' % (
-                    self.ipa_host, self.domain.upper()) ),
-        )
+    find_request = dict(
+        method='service_find',
+        name=[],
+        item=dict(
+            all = True,
+            krbcanonicalname = 'test/%s@%s' % (
+                AbstractTestClass.ipa_host,
+                AbstractTestClass.ipa_domain.upper()) ),
+    )
 
+    principal = 'test/%s@%s' % (
+        AbstractTestClass.ipa_host,
+        AbstractTestClass.ipa_domain.upper())
     cert = ("MIICjDCCAfWgAwIBAgIJALTKa/IEGbmsMA0GCSqGSIb3DQEBCwUAMF8xCzAJ"
             "BgNVBAYTAkFVMRMwEQYDVQQIDApTb21lLVN0YXRlMSEwHwYDVQQKDBhJbnRl"
             "cm5ldCBXaWRnaXRzIFB0eSBMdGQxGDAWBgNVBAMMD2gwMS56dWx0cm9uLmNv"
@@ -46,48 +48,43 @@ class TestServiceIPAClient(unittest.TestCase, AbstractTestClass):
     # Show long diffs incl. cert
     maxDiff = 3000
 
-    ipa_host = os.getenv('IPA_HOST','host1.example.com')
-
-    # def test_10_service_present_new(self):
-    #     self.runner(
-    #         test_key = 10,
-    #         module_params = dict(
-    #             krbcanonicalname = "test/%s@%s" % (
-    #                 self.ipa_host, self.domain.upper()),
-    #             usercertificate = self.cert,
-    #             state = "present",
-    #         ),
-    #         post_json_calls = [
-    #             dict(
-    #                 name = 'find new object',
-    #                 request = self.find_request,
-    #                 reply = {},
-    #             ),
-    #             dict(
-    #                 name = 'add new object',
-    #                 request = {
-    #                     'item': { 'usercertificate': '%s' % self.cert,
-    #                               'all': True},
-    #                     'method': 'service_add',
-    #                     'name': [
-    #                         'test/%s@%s' % (
-    #                             self.ipa_host, self.domain.upper()) ]
-    #                 },
-    #                 reply_updates = {
-    #                     'usercertificate' : self.cert },
-    #             ),
-    #             # No enable/disable operation
-    #         ],
-    #     )
+    def test_10_service_present_new(self):
+        self.runner(
+            test_key = 10,
+            module_params = dict(
+                krbcanonicalname = self.principal,
+                usercertificate = self.cert,
+                state = "present",
+            ),
+            post_json_calls = [
+                dict(
+                    name = 'find new object',
+                    request = self.find_request,
+                    reply = {},
+                ),
+                dict(
+                    name = 'add new object',
+                    request = {
+                        'item': { 'usercertificate': '%s' % self.cert,
+                                  'all': True},
+                        'method': 'service_add',
+                        'name': [ self.principal ]
+                    },
+                    reply_updates = {
+                        'usercertificate' : self.cert,
+                        'managedby_host' : [ self.ipa_host ]},
+                ),
+                # No enable/disable operation
+            ],
+        )
 
     def test_11_service_existing_present_krbticket_flags_1(self):
         self.runner(
             test_key = 11,
             module_params = dict(
-                krbcanonicalname = "test/%s@%s" % (
-                    self.ipa_host, self.domain.upper()),
+                krbcanonicalname = self.principal,
                 state = "present",                 # Present:
-                ipakrbrequirespreauth = True,      # krbticketflags:  +128
+                ipakrbrequirespreauth = False,     # krbticketflags:  -128
             ),
             post_json_calls = [
                 dict(
@@ -97,358 +94,342 @@ class TestServiceIPAClient(unittest.TestCase, AbstractTestClass):
                 dict(
                     name = 'modify existing object',
                     request = {
-                        'item': {'krbticketflags': 128,
+                        'item': {'ipakrbrequirespreauth': False,
                                  'all': True},
                         'method': 'service_mod',
-                        'name': [ 'test/%s@%s' % (self.ipa_host, self.domain.upper()) ]
+                        'name': [ self.principal ],
                     },
-                    reply_updates = { 'krbticketflags': [ 128 ] },
+                    reply_updates = { 'ipakrbrequirespreauth': False },
                 ),
                 # No enable/disable operation
             ],
         )
 
-    # def test_12_service_existing_present_krbticketflags_2(self):
-    #     self.runner(
-    #         test_key = 12,
-    #         module_params = dict(
-    #             krbcanonicalname = "test/host1.%s@%s" % (self.domain, self.domain.upper()),
-    #             state = "present",                 # Present:   start: 128
-    #             ipakrbrequirespreauth = False,     # krbticketflags: -128
-    #             ipakrbokasdelegate = True,         # krbticketflags: +1048576
-    #             ipakrboktoauthasdelegate = True,   # krbticketflags: +2097152
-    #         ),
-    #         post_json_calls = [
-    #             dict(
-    #                 name = 'find existing object',
-    #                 request = self.find_request,
-    #             ),
-    #             dict(
-    #                 name = 'modify existing object',
-    #                 request = {
-    #                     'item': {'krbticketflags': 3145728,
-    #                              'all': True},
-    #                     'method': 'service_mod',
-    #                     'name': [ 'test/%s@%s' % (self.ipa_host, self.domain.upper()) ]
-    #                 },
-    #                 reply_updates = { 'krbticketflags': [ 3145728 ] },
-    #             ),
-    #             # No enable/disable operation
-    #         ],
-    #     )
+    def test_12_service_existing_present_krbticketflags_2(self):
+        self.runner(
+            test_key = 12,
+            module_params = dict(
+                krbcanonicalname = self.principal,
+                state = "present",                 # Present:   start: 128
+                ipakrbrequirespreauth = True,      # krbticketflags: +128
+                ipakrbokasdelegate = True,         # krbticketflags: +1048576
+                ipakrboktoauthasdelegate = True,   # krbticketflags: +2097152
+            ),
+            post_json_calls = [
+                dict(
+                    name = 'find existing object',
+                    request = self.find_request,
+                ),
+                dict(
+                    name = 'modify existing object',
+                    request = {
+                        'item': {'ipakrbrequirespreauth': True,
+                                 'ipakrbokasdelegate': True,
+                                 'ipakrboktoauthasdelegate': True,
+                                 'all': True},
+                        'method': 'service_mod',
+                        'name': [ self.principal ]
+                    },
+                    reply_updates = { 'ipakrbrequirespreauth': True,
+                                      'ipakrbokasdelegate': True,
+                                      'ipakrboktoauthasdelegate': True,
+                                  },
+                ),
+                # No enable/disable operation
+            ],
+        )
 
-    # def test_13_service_existing_absent_krbticketflags(self):
-    #     self.runner(
-    #         test_key = 13,
-    #         module_params = dict(
-    #             krbcanonicalname = "test/host1.%s@%s" % (self.domain, self.domain.upper()),
-    #             state = "absent",                  # Absent:   start: 3145728
-    #             ipakrbokasdelegate = True,         # krbticketflags: -1048576
-    #         ),
-    #         post_json_calls = [
-    #             dict(
-    #                 name = 'find existing object',
-    #                 request = self.find_request,
-    #             ),
-    #             dict(
-    #                 name = 'modify existing object',
-    #                 request = {
-    #                     'item': {'krbticketflags': 2097152 ],
-    #                              'addattr': [], 'delattr': [], 'all': True},
-    #                     'method': 'service_mod',
-    #                     'name': [ 'test/%s@%s' % (self.ipa_host, self.domain.upper()) ]
-    #                 },
-    #                 reply_updates = { 'krbticketflags': [ 2097152 ] },
-    #             ),
-    #             # No enable/disable operation
-    #         ],
-    #     )
+    def test_13_service_existing_absent_krbticketflags(self):
+        self.runner(
+            test_key = 13,
+            module_params = dict(
+                krbcanonicalname = self.principal,
+                state = "absent",                  # Absent
+                ipakrbokasdelegate = True,         # To False
+            ),
+            post_json_calls = [
+                dict(
+                    name = 'find existing object',
+                    request = self.find_request,
+                ),
+                dict(
+                    name = 'modify existing object',
+                    request = {
+                        'item': {'ipakrbokasdelegate': False,
+                                 'all': True},
+                        'method': 'service_mod',
+                        'name': [ self.principal ]
+                    },
+                    reply_updates = { 'ipakrbokasdelegate': False, },
+                ),
+                # No enable/disable operation
+            ],
+        )
 
-    # def test_14_service_existing_exact_krbticketflags(self):
-    #     self.runner(
-    #         test_key = 14,
-    #         module_params = dict(
-    #             krbcanonicalname = "test/host1.%s@%s" % (self.domain, self.domain.upper()),
-    #             state = "exact",                   # Exact:  start 2097152
-    #             ipakrbrequirespreauth = True,      # krbticketflags: +128
-    #             ipakrbokasdelegate = False,        # krbticketflags: Noop
-    #             # ipakrboktoauthasdelegate = True, # krbticketflags: -2097152
-    #             certificate = self.cert,           # Same
-    #         ),
-    #         post_json_calls = [
-    #             dict(
-    #                 name = 'find existing object',
-    #                 request = self.find_request,
-    #             ),
-    #             dict(
-    #                 name = 'modify existing object',
-    #                 request = {
-    #                     'item': {'krbticketflags': '128',
-    #                              'all': True},
-    #                     'method': 'service_mod',
-    #                     'name': [ 'test/%s@%s' % (self.ipa_host, self.domain.upper()) ]
-    #                 },
-    #                 reply_updates = { 'krbticketflags': [ 128 ] },
-    #             ),
-    #             # No enable/disable operation
-    #         ],
-    #     )
+    def test_14_service_existing_exact_krbticketflags(self):
+        client = self.runner(
+            test_key = 14,
+            module_params = dict(
+                krbcanonicalname = self.principal,
+                state = "exact",                    # Exact
+                ipakrbrequirespreauth = True,       # Noop
+                ipakrbokasdelegate = False,         # Noop
+                # ipakrboktoauthasdelegate = False, # To False
+                usercertificate = self.cert,        # Noop
+                # managedby_host = self.ipa_host    # Remove
+            ),
+            post_json_calls = [
+                dict(
+                    name = 'find existing object',
+                    request = self.find_request,
+                ),
+                dict(
+                    name = 'modify existing object',
+                    request = {
+                        'item': {'ipakrboktoauthasdelegate': False,
+                                 'all': True},
+                        'method': 'service_mod',
+                        'name': [ self.principal ]
+                    },
+                    reply_updates = { 'ipakrboktoauthasdelegate': False },
+                ),
+                dict(
+                    name = 'remove managedby_host',
+                    request = {'item': {'host': [self.ipa_host],
+                                        'all': True},
+                               'method': 'service_remove_host',
+                               'name': [ self.principal ]},
+                    reply_updates = { 'managedby_host': [] },
+                ),
+                # No enable/disable operation
+            ],
+        )
+        # Store base DN for live tests
+        if 'dn' in client.requests[0]:
+            dn = client.requests[0]['dn']
+            base_dn = re.match(r'.*,cn=accounts,(.*)', dn).group(1)
+            self.current_state['directory_base_dn'] = base_dn
+        else:
+            self.current_state['directory_base_dn'] = 'dc=example,dc=com'
 
-    # def test_15_service_existing_set_managedby(self):
-    #     self.runner(
-    #         test_key = 15,
-    #         module_params = dict(
-    #             krbcanonicalname = "test/host1.%s@%s" % (self.domain, self.domain.upper()),
-    #             state = "present",                 # Present:
-    #             host = "host1.example.com",        # Add host1
-    #             directory_base_dn = 'dc=example,dc=com',
-    #         ),
-    #         post_json_calls = [
-    #             dict(
-    #                 name = 'find existing object',
-    #                 request = self.find_request,
-    #             ),
-    #             dict(
-    #                 name = 'modify existing object',
-    #                 request = {
-    #                     'item': {
-    #                         'addattr': [ (
-    #                             'managedby=fqdn=%s,cn=computers,'
-    #                             'cn=accounts,dc=example,dc=com' % self.ipa_host) ],
-    #                         'all': True},
-    #                     'method': 'service_mod',
-    #                     'name': [ 'test/%s@%s' % (self.ipa_host, self.domain.upper()) ]
-    #                 },
-    #                 reply_updates = {
-    #                     'managedby' : [ 'fqdn=%s,cn=computers,'
-    #                                     'cn=accounts,dc=example,dc=com' % self.ipa_host ] },
-    #             ),
-    #             # No enable/disable operation
-    #         ],
-    #     )
+    def test_15_service_existing_set_managedby(self):
+        self.runner(
+            test_key = 15,
+            module_params = dict(
+                krbcanonicalname = self.principal,
+                state = "present",                 # Present:
+                managedby_host = self.ipa_host,    # Add back ipa_host
+            ),
+            post_json_calls = [
+                dict(
+                    name = 'find existing object',
+                    request = self.find_request,
+                ),
+                dict(
+                    name = 'add managedby_host',
+                    request = {
+                        'item': {
+                            'host': [ self.ipa_host ],
+                            'all': True},
+                        'method': 'service_add_host',
+                        'name': [ self.principal ]
+                    },
+                    reply_updates = {
+                        'managedby_host' : [ self.ipa_host ] },
+                ),
+                # No enable/disable operation
+            ],
+        )
 
-    # def test_16_service_existing_present_read_write_keytab(self):
-    #     self.runner(
-    #         test_key = 16,
-    #         module_params = dict(
-    #             krbcanonicalname = "test/host1.%s@%s" % (self.domain, self.domain.upper()),
-    #             state = "present",                           # Present:
-    #             write_keytab_users = "admin",                # Add uid=admin
-    #             write_keytab_hosts = ["host1.example.com",   # Add fqdn=host1
-    #                                   "host2.example.com",   # Add fqdn=host2
-    #                                   "host3.example.com"],  # Add fqdn=host3
-    #             read_keytab_groups = "editors",              # Add cn=editors
-    #             read_keytab_hostgroups = "hg1",              # Add cn=hg1
-    #             directory_base_dn = 'dc=example,dc=com',
-    #         ),
-    #         post_json_calls = [
-    #             dict(
-    #                 name = 'find existing object',
-    #                 request = self.find_request,
-    #             ),
-    #             dict(
-    #                 name = 'modify existing object',
-    #                 request = {
-    #                     'item': {
-    #                         'addattr': [
-    #                             ('ipaallowedtoperform;read_keys='
-    #                              'cn=editors,cn=groups,'
-    #                              'cn=accounts,dc=example,dc=com'),
-    #                             ('ipaallowedtoperform;read_keys='
-    #                              'cn=hg1,cn=hostgroups,'
-    #                              'cn=accounts,dc=example,dc=com'),
-    #                             ('ipaallowedtoperform;write_keys='
-    #                              'fqdn=host1.example.com,cn=computers,'
-    #                              'cn=accounts,dc=example,dc=com'),
-    #                             ('ipaallowedtoperform;write_keys='
-    #                              'fqdn=host2.example.com,cn=computers,'
-    #                              'cn=accounts,dc=example,dc=com'),
-    #                             ('ipaallowedtoperform;write_keys='
-    #                              'fqdn=host3.example.com,cn=computers,'
-    #                              'cn=accounts,dc=example,dc=com'),
-    #                             ('ipaallowedtoperform;write_keys='
-    #                              'uid=admin,cn=users,'
-    #                              'cn=accounts,dc=example,dc=com'),
-    #                         ],
-    #                         'all': True},
-    #                     'method': 'service_mod',
-    #                     'name': [ 'test/%s@%s' % (self.ipa_host, self.domain.upper()) ]
-    #                 },
-    #                 reply_updates = {
-    #                     'ipaallowedtoperform;write_keys': [
-    #                         ( 'uid=admin,cn=users,'
-    #                           'cn=accounts,dc=example,dc=com'),
-    #                         ( 'fqdn=host1.example.com,cn=computers,'
-    #                           'cn=accounts,dc=example,dc=com'),
-    #                         ( 'fqdn=host2.example.com,cn=computers,'
-    #                           'cn=accounts,dc=example,dc=com'),
-    #                         ( 'fqdn=host3.example.com,cn=computers,'
-    #                           'cn=accounts,dc=example,dc=com')],
-    #                     'ipaallowedtoperform;read_keys': [
-    #                         ( 'cn=editors,cn=groups,'
-    #                           'cn=accounts,dc=example,dc=com'),
-    #                         ( 'cn=hg1,cn=hostgroups,'
-    #                           'cn=accounts,dc=example,dc=com')],
-    #                 },
-    #             ),
-    #             # No enable/disable operation
-    #         ],
-    #     )
+    def test_16_service_existing_present_read_write_keytab(self):
+        # Restore base DN
+        directory_base_dn = self.current_state.get('directory_base_dn',None)
+        if directory_base_dn is None:
+            raise unittest.SkipTest(
+                'Unable to determine directory_base_dn from previous test')
 
-    # def test_17_service_existing_absent_read_write_keytab(self):
-    #     self.runner(
-    #         test_key = 17,
-    #         module_params = dict(
-    #             krbcanonicalname = "test/host1.%s@%s" % (self.domain, self.domain.upper()),
-    #             state = "absent",                            # Absent:
-    #             write_keytab_hosts = ["host1.example.com",   # Del fqdn=host1
-    #                                   "host4.example.com"],  # Noop
-    #             read_keytab_groups = "editors",              # Del cn=editors
-    #             directory_base_dn = 'dc=example,dc=com',
-    #         ),
-    #         post_json_calls = [
-    #             dict(
-    #                 name = 'find existing object',
-    #                 request = self.find_request,
-    #             ),
-    #             dict(
-    #                 name = 'modify existing object',
-    #                 request = {
-    #                     'item': {
-    #                         'addattr': [
-                                
-    #                         ],
-    #                         'delattr': [
-    #                             ('ipaallowedtoperform;read_keys='
-    #                              'cn=editors,cn=groups,'
-    #                              'cn=accounts,dc=example,dc=com'),
-    #                             ('ipaallowedtoperform;write_keys='
-    #                              'fqdn=host1.example.com,cn=computers,'
-    #                              'cn=accounts,dc=example,dc=com'),
-    #                         ],
-    #                         'all': True},
-    #                     'method': 'service_mod',
-    #                     'name': [ 'test/%s@%s' % (self.ipa_host, self.domain.upper()) ]
-    #                 },
-    #                 reply_updates = {
-    #                     'ipaallowedtoperform;write_keys': [
-    #                         ( 'fqdn=host2.example.com,cn=computers,'
-    #                           'cn=accounts,dc=example,dc=com'),
-    #                         ( 'fqdn=host3.example.com,cn=computers,'
-    #                           'cn=accounts,dc=example,dc=com'),
-    #                         ( 'uid=admin,cn=users,'
-    #                           'cn=accounts,dc=example,dc=com')],
-    #                     'ipaallowedtoperform;read_keys': [
-    #                         ( 'cn=hg1,cn=hostgroups,'
-    #                           'cn=accounts,dc=example,dc=com')],
-    #                 },
-    #             ),
-    #             # No enable/disable operation
-    #         ],
-    #     )
+        self.runner(
+            test_key = 16,
+            module_params = dict(
+                krbcanonicalname = self.principal,
+                state = "present",                           # Present:
+                ipaallowedtoperform_write_keys_user = (
+                    "admin"),                                # Add uid=admin
+                ipaallowedtoperform_write_keys_host = (
+                    self.ipa_host),                          # Add fqdn=host1
+                ipaallowedtoperform_read_keys_group = (
+                    "editors"),                              # Add cn=editors
+                ipaallowedtoperform_read_keys_hostgroup = (
+                    "ipaservers"),                           # Add cn=ipaservers
+                directory_base_dn = directory_base_dn,
+            ),
+            post_json_calls = [
+                dict(
+                    name = 'find existing object',
+                    request = self.find_request,
+                ),
+                dict(
+                    name = 'add create keytab objects to object',
+                    request = {
+                        'item': {'all': True,
+                                 'host': [self.ipa_host],
+                                 'user': ['admin']},
+                        'method': 'service_allow_create_keytab',
+                        'name': [self.principal],
+                    },
+                    reply_updates = {
+                        'ipaallowedtoperform_write_keys_host': [
+                            self.ipa_host ],
+                        'ipaallowedtoperform_write_keys_user': [
+                            'admin' ],
+                    },
+                ),
+                dict(
+                    name = 'add retrieve keytab objects to object',
+                    request = {
+                        'item': {'all': True,
+                                 'group': ['editors'],
+                                 'hostgroup': ['ipaservers']},
+                        'method': 'service_allow_retrieve_keytab',
+                        'name': [self.principal],
+                    },
+                    reply_updates = {
+                        'ipaallowedtoperform_read_keys_group': [
+                            'editors' ],
+                        'ipaallowedtoperform_read_keys_hostgroup': [
+                            'ipaservers' ],
+                    },
+                ),
+                # No enable/disable operation
+            ],
+        )
 
-    # def test_18_service_existing_exact_read_write_keytab(self):
-    #     self.runner(
-    #         test_key = 18,
-    #         module_params = dict(
-    #             krbcanonicalname = "test/host1.%s@%s" % (self.domain, self.domain.upper()),
-    #             state = "exact",                     # Exact:
-    #             read_keytab_hostgroups = ["hg1",     # Keep read hostgroup hg1
-    #                                       "hg2"],    # Add read  hostgroup hg2
-    #             read_keytab_groups = "editors",      # Add read group editors
-    #             write_keytab_users = "admin",        # Keep write user admin
-    #             # write_keytab_hosts = ["host2",     # Del write host host2
-    #             #                       "host3"],    # Del write host host3
-    #             # ipakrbrequirespreauth = True,      # krbticketflags: 0
-    #             # ipakrboktoauthasdelegate = True,
-    #             host = "host2.example.com",         # Add managedby host2
-    #             # host = "host1.example.com",       # Del managedby host1
-    #             # certificate = self.cert,           # Del certificate
+    def test_17_service_existing_absent_read_write_keytab(self):
+        # Restore base DN
+        directory_base_dn = self.current_state.get('directory_base_dn',None)
+        if directory_base_dn is None:
+            raise unittest.SkipTest(
+                'Unable to determine directory_base_dn from previous test')
 
-    #             directory_base_dn = 'dc=example,dc=com',
-    #         ),
-    #         post_json_calls = [
-    #             dict(
-    #                 name = 'find existing object',
-    #                 request = self.find_request,
-    #             ),
-    #             dict(
-    #                 name = 'modify existing object',
-    #                 request = {
-    #                     'item': {
-    #                         'krbticketflags': 0,
-    #                         'addattr': [
-    #                             ('ipaallowedtoperform;read_keys='
-    #                              'cn=editors,cn=groups,'
-    #                              'cn=accounts,dc=example,dc=com'),
-    #                             ('ipaallowedtoperform;read_keys='
-    #                              'cn=hg2,cn=hostgroups,'
-    #                              'cn=accounts,dc=example,dc=com'),
-    #                             ('managedby='
-    #                              'fqdn=host2.example.com,cn=computers,'
-    #                              'cn=accounts,dc=example,dc=com'),
-    #                         ],
-    #                         'delattr': [
-    #                             'certificate=%s' % self.cert,
-    #                             ('ipaallowedtoperform;write_keys='
-    #                              'fqdn=host2.example.com,cn=computers,'
-    #                              'cn=accounts,dc=example,dc=com'),
-    #                             ('ipaallowedtoperform;write_keys='
-    #                              'fqdn=host3.example.com,cn=computers,'
-    #                              'cn=accounts,dc=example,dc=com'),
-    #                             ('managedby='
-    #                              'fqdn=host1.example.com,cn=computers,'
-    #                              'cn=accounts,dc=example,dc=com'),
-    #                         ],
-    #                         'all': True},
-    #                     'method': 'service_mod',
-    #                     'name': [ 'test/%s@%s' % (self.ipa_host, self.domain.upper()) ]
-    #                 },
-    #                 reply_updates = {
-    #                     'certificate': None,
-    #                     'ipaallowedtoperform;read_keys': [
-    #                         ( 'cn=editors,cn=groups,'
-    #                           'cn=accounts,dc=example,dc=com'),
-    #                         ( 'cn=hg1,cn=hostgroups,'
-    #                           'cn=accounts,dc=example,dc=com'),
-    #                         ( 'cn=hg2,cn=hostgroups,'
-    #                           'cn=accounts,dc=example,dc=com')],
-    #                     'ipaallowedtoperform;write_keys': [
-    #                         ( 'uid=admin,cn=users,'
-    #                           'cn=accounts,dc=example,dc=com')],
-    #                     'krbticketflags' : [ 0 ],
-    #                     'managedby' : [
-    #                         ( 'fqdn=host2.example.com,cn=computers,'
-    #                           'cn=accounts,dc=example,dc=com')],
-    #                 },
-    #             ),
-    #             # No enable/disable operation
-    #         ],
-    #     )
+        self.runner(
+            test_key = 17,
+            module_params = dict(
+                krbcanonicalname = self.principal,
+                state = "absent",                            # Absent:
+                ipaallowedtoperform_write_keys_host = (
+                    self.ipa_host),                          # Rem host=ipa_host
+                ipaallowedtoperform_read_keys_hostgroup = (
+                    "ipaservers"),                           # Rem cn=ipaservers
+                directory_base_dn = '%s' % directory_base_dn,
+            ),
+            post_json_calls = [
+                dict(
+                    name = 'find existing object',
+                    request = self.find_request,
+                ),
+                dict(
+                    name = 'remove create keytob objects from object',
+                    request = {
+                        'item': {'all': True,
+                                 'host': [self.ipa_host]},
+                        'method': 'service_disallow_create_keytab',
+                        'name': [self.principal]},
+                    reply_updates = {
+                        'ipaallowedtoperform_write_keys_host': [None],
+                    },
+                ),
+                dict(
+                    name = 'remove retrieve keytob objects from object',
+                    request = {
+                        'item': {'all': True,
+                                 'hostgroup': ['ipaservers']},
+                        'method': 'service_disallow_retrieve_keytab',
+                        'name': [self.principal]},
+                    reply_updates = {
+                        'ipaallowedtoperform_read_keys_hostgroup': [None],
+                    },
+                ),
+                # No enable/disable operation
+            ],
+        )
 
-    # def test_19_service_existing_absent(self):
-    #     self.runner(
-    #         test_key = 19,
-    #         module_params = dict(
-    #             krbcanonicalname = "test/host1.%s@%s" % (self.domain, self.domain.upper()),
-    #             state = "absent",                     # Absent whole object
-    #         ),
-    #         post_json_calls = [
-    #             dict(
-    #                 name = 'find existing object',
-    #                 request = self.find_request,
-    #             ),
-    #             dict(
-    #                 name = 'modify existing object',
-    #                 request = {
-    #                     'item': {},
-    #                     'method': 'service_del',
-    #                     'name': [ 'test/%s@%s' % (self.ipa_host, self.domain.upper()) ]
-    #                 },
-    #                 reply = {},
-    #             ),
-    #             # No enable/disable operation
-    #         ],
-    #     )
+    def test_18_service_existing_exact_read_write_keytab(self):
+        # Restore base DN
+        directory_base_dn = self.current_state.get('directory_base_dn',None)
+        if directory_base_dn is None:
+            raise unittest.SkipTest(
+                'Unable to determine directory_base_dn from previous test')
+
+        self.runner(
+            test_key = 18,
+            module_params = dict(
+                krbcanonicalname = self.principal,
+                state = "exact",                        # Exact:
+                ipaallowedtoperform_read_keys_hostgroup = (
+                    "ipaservers"),                      # Add cn=ipaservers
+                ipaallowedtoperform_read_keys_group = (
+                    "editors"),                         # Noop
+                ipaallowedtoperform_write_keys_user = (
+                    "admin"),                           # Noop
+                managedby_host = self.ipa_host,         # Noop
+                directory_base_dn = '%s' % directory_base_dn,
+            ),
+            post_json_calls = [
+                dict(
+                    name = 'find existing object',
+                    request = self.find_request,
+                ),
+                dict(
+                    name = 'modify existing object',
+                    request = {
+                        'item': {'usercertificate': None,
+                                 'all': True},
+                        'method': 'service_mod',
+                        'name': [self.principal]},
+                    reply_updates = {
+                        'usercertificate': None,
+                    },
+                ),
+                dict(
+                    name = 'add create keytab objects to object',
+                    request = {
+                        'item': {'hostgroup': ['ipaservers'],
+                                 'all': True},
+                        'method': 'service_allow_retrieve_keytab',
+                        'name': [self.principal],
+                    },
+                    reply_updates = {
+                        'ipaallowedtoperform_read_keys_hostgroup': [
+                            'ipaservers' ],
+                    },
+                ),
+                # No enable/disable operation
+            ],
+        )
+
+    def test_19_service_existing_absent(self):
+        self.runner(
+            test_key = 19,
+            module_params = dict(
+                krbcanonicalname = self.principal,
+                state = "absent",                     # Absent whole object
+            ),
+            post_json_calls = [
+                dict(
+                    name = 'find existing object',
+                    request = self.find_request,
+                ),
+                dict(
+                    name = 'modify existing object',
+                    request = {
+                        'item': {},
+                        'method': 'service_del',
+                        'name': [ self.principal ],
+                    },
+                    reply = {},
+                ),
+                # No enable/disable operation
+            ],
+        )
 
 
