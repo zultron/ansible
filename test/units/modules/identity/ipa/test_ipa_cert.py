@@ -176,7 +176,8 @@ class TestCertIPAClient(unittest.TestCase, AbstractTestClass):
         self.runner(
             test_key = 12,
             module_params = dict(
-                principal = "Certificate Authority",
+                principal = "CN=Certificate Authority,O=%s" % (
+                    self.ipa_domain.upper()),
                 cacn = "ipa",
                 state = "present",
             ),

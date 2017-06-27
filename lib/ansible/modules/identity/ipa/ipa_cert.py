@@ -136,6 +136,11 @@ class CertIPAClient(IPAClient):
                                  choices=range(11)),
     )
 
+    def munge_module_params(self):
+        item = super(CertIPAClient, self).munge_module_params()
+        item['principal'] = self.subject_to_principal(item.pop('principal'))
+        return item
+
     def mod_request_params(self):
         # cert_request method wants request in PEM format as name
         if 'req' not in self.module.params:
@@ -164,7 +169,8 @@ class CertIPAClient(IPAClient):
     def find_request_item(self):
         # cert_find uses 'subject' as key rather than 'principal'
         item = {'all': True,
-                'subject': self.module.params['principal'],
+                'subject': self.subject_to_principal(
+                    self.module.params['principal']),
                 'cacn': self.module.params['cacn'],
                 'exactly': True,
         }
