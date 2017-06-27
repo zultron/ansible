@@ -326,9 +326,6 @@ class UserIPAClient(EnablableIPAClient):
             # If no changes needed, do nothing
             if princs is None:  continue
 
-            # Mark object changed
-            self.changed = True
-
             # If in check mode, do nothing
             if self.module.check_mode:  continue
 
