@@ -167,7 +167,7 @@ class TestServiceIPAClient(unittest.TestCase, AbstractTestClass):
         )
 
     def test_14_service_existing_exact_krbticketflags(self):
-        client = self.runner(
+        self.runner(
             test_key = 14,
             module_params = dict(
                 krbcanonicalname = self.principal,
@@ -204,13 +204,6 @@ class TestServiceIPAClient(unittest.TestCase, AbstractTestClass):
                 # No enable/disable operation
             ],
         )
-        # Store base DN for live tests
-        if 'dn' in client.requests[0]:
-            dn = client.requests[0]['dn']
-            base_dn = re.match(r'.*,cn=accounts,(.*)', dn).group(1)
-            self.current_state['directory_base_dn'] = base_dn
-        else:
-            self.current_state['directory_base_dn'] = 'dc=example,dc=com'
 
     def test_15_service_existing_set_managedby(self):
         self.runner(
@@ -242,12 +235,6 @@ class TestServiceIPAClient(unittest.TestCase, AbstractTestClass):
         )
 
     def test_16_service_existing_present_read_write_keytab(self):
-        # Restore base DN
-        directory_base_dn = self.current_state.get('directory_base_dn',None)
-        if directory_base_dn is None:
-            raise unittest.SkipTest(
-                'Unable to determine directory_base_dn from previous test')
-
         self.runner(
             test_key = 16,
             module_params = dict(
@@ -261,7 +248,6 @@ class TestServiceIPAClient(unittest.TestCase, AbstractTestClass):
                     "editors"),                              # Add cn=editors
                 ipaallowedtoperform_read_keys_hostgroup = (
                     "ipaservers"),                           # Add cn=ipaservers
-                directory_base_dn = directory_base_dn,
             ),
             post_json_calls = [
                 dict(
@@ -305,12 +291,6 @@ class TestServiceIPAClient(unittest.TestCase, AbstractTestClass):
         )
 
     def test_17_service_existing_absent_read_write_keytab(self):
-        # Restore base DN
-        directory_base_dn = self.current_state.get('directory_base_dn',None)
-        if directory_base_dn is None:
-            raise unittest.SkipTest(
-                'Unable to determine directory_base_dn from previous test')
-
         self.runner(
             test_key = 17,
             module_params = dict(
@@ -320,7 +300,6 @@ class TestServiceIPAClient(unittest.TestCase, AbstractTestClass):
                     self.ipa_host),                          # Rem host=ipa_host
                 ipaallowedtoperform_read_keys_hostgroup = (
                     "ipaservers"),                           # Rem cn=ipaservers
-                directory_base_dn = '%s' % directory_base_dn,
             ),
             post_json_calls = [
                 dict(
@@ -354,12 +333,6 @@ class TestServiceIPAClient(unittest.TestCase, AbstractTestClass):
         )
 
     def test_18_service_existing_exact_read_write_keytab(self):
-        # Restore base DN
-        directory_base_dn = self.current_state.get('directory_base_dn',None)
-        if directory_base_dn is None:
-            raise unittest.SkipTest(
-                'Unable to determine directory_base_dn from previous test')
-
         self.runner(
             test_key = 18,
             module_params = dict(
@@ -372,7 +345,6 @@ class TestServiceIPAClient(unittest.TestCase, AbstractTestClass):
                 ipaallowedtoperform_write_keys_user = (
                     "admin"),                           # Noop
                 managedby_host = self.ipa_host,         # Noop
-                directory_base_dn = '%s' % directory_base_dn,
             ),
             post_json_calls = [
                 dict(
