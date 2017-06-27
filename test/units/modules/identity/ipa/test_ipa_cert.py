@@ -193,6 +193,10 @@ class TestCertIPAClient(unittest.TestCase, AbstractTestClass):
                                   exactly = True,
                               ),
                     ),
+                    reply = {
+                        'cacn': 'ipa',
+                        'principal': 'Certificate Authority',
+                    },
                 ),
             ],
         )
